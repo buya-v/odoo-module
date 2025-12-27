@@ -31,12 +31,15 @@
                             { location: 'Warehouse B', sku: 'SKU002', quantity: 80, threshold: 20 },
                             { location: 'Transit', sku: 'SKU003', quantity: 30, threshold: 10 },
                             { location: 'Quality Control', sku: 'SKU004', quantity: 120, threshold: 40 },
+                            { location: 'Scrapped', sku: 'SKU005', quantity: 5, threshold: 1 }
                         ]);
                     } else if (url === '/api/recent_activity') {
                         resolve([
                             { user: 'John Doe', action: 'Scanned SKU005', timestamp: '2024-01-20 10:00', status: 'success' },
                             { user: 'Jane Smith', action: 'Moved SKU001 to Warehouse A', timestamp: '2024-01-20 10:15', status: 'success' },
                             { user: 'Peter Jones', action: 'Adjusted stock for SKU002', timestamp: '2024-01-20 10:30', status: 'warning' },
+                            { user: 'Alice Brown', action: 'Created new transfer order', timestamp: '2024-01-20 11:00', status: 'success' },
+                            { user: 'David Lee', action: 'Marked SKU005 as scrapped', timestamp: '2024-01-20 11:15', status: 'error' }
                         ]);
                     } else if (url === '/api/warehouse_zones') {
                         resolve([
@@ -44,11 +47,13 @@
                             { warehouse: 'Warehouse A', zone: 'Aisle 2', utilization: 0.50 },
                             { warehouse: 'Warehouse B', zone: 'Aisle 1', utilization: 0.25 },
                             { warehouse: 'Warehouse B', zone: 'Aisle 2', utilization: 0.90 },
+                            { warehouse: 'Warehouse C', zone: 'Receiving', utilization: 0.60 }
                         ]);
                     } else if (url === '/api/interwarehouse_transfers') {
                         resolve([
                             { from: 'Warehouse A', to: 'Warehouse B', sku: 'SKU001', quantity: 50, status: 'Pending' },
                             { from: 'Warehouse B', to: 'Warehouse A', sku: 'SKU002', quantity: 20, status: 'Completed' },
+                            { from: 'Warehouse C', to: 'Warehouse A', sku: 'SKU003', quantity: 30, status: 'In Transit' }
                         ]);
                     }
                      else if (url === '/api/gs1_data') {
@@ -111,7 +116,9 @@
                                     <CheckCircle className="text-green-500" size={20} />
                                 ) : item.status === 'warning' ? (
                                     <AlertTriangle className="text-yellow-500" size={20} />
-                                ) : null}
+                                ) : (
+                                  <AlertTriangle className="text-red-500" size={20} />
+                                )}
                             </li>
                         ))}
                     </ul>
@@ -231,7 +238,9 @@
             const [settings, setSettings] = useState({
                 notificationsEnabled: true,
                 theme: 'dark',
-                language: 'en'
+                language: 'en',
+                automaticUpdates: false,
+                warehouseLocation: 'New York'
             });
 
             const handleChange = (e) => {
@@ -291,6 +300,29 @@
                             </select>
                         </div>
 
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Automatic Updates:</label>
+                            <input
+                                type="checkbox"
+                                name="automaticUpdates"
+                                checked={settings.automaticUpdates}
+                                onChange={handleChange}
+                                className="mr-2 leading-tight"
+                            />
+                            <span>Enable Automatic Updates</span>
+                        </div>
+
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Warehouse Location:</label>
+                            <input
+                                type="text"
+                                name="warehouseLocation"
+                                value={settings.warehouseLocation}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            />
+                        </div>
+
                         <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
                             Save Settings
                         </button>
@@ -303,7 +335,9 @@
             const [profileData, setProfileData] = useState({
                 name: 'John Doe',
                 email: 'john.doe@example.com',
-                location: 'New York'
+                location: 'New York',
+                phone: '123-456-7890',
+                role: 'Warehouse Manager'
             });
 
             const handleChange = (e) => {
@@ -352,6 +386,28 @@
                                 type="text"
                                 name="location"
                                 value={profileData.location}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            />
+                        </div>
+
+                         <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Phone:</label>
+                            <input
+                                type="text"
+                                name="phone"
+                                value={profileData.phone}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            />
+                        </div>
+
+                         <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Role:</label>
+                            <input
+                                type="text"
+                                name="role"
+                                value={profileData.role}
                                 onChange={handleChange}
                                 className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
                             />
@@ -509,6 +565,7 @@
                 { zone: 'Aisle 2', utilization: 0.5 },
                 { zone: 'Aisle 3', utilization: 0.2 },
                 { zone: 'Aisle 4', utilization: 0.9 },
+                { zone: 'Receiving', utilization: 0.6 }
             ];
 
             return (
