@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>demo-odoo-module</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide-react@latest"></script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; font-family: sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { Barcode, Home, Settings, User, Activity, PackageCheck, ArrowRight, ArrowLeft, Map, Layers, Plus, Search, CheckCircle, AlertTriangle } = lucideReact;
+
+        // Utility function to simulate data fetching
+        const fetchData = (url) => {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    if (url === '/api/stock_levels') {
+                        resolve([
+                            { location: 'Warehouse A', sku: 'SKU001', quantity: 150, threshold: 50 },
+                            { location: 'Warehouse B', sku: 'SKU002', quantity: 80, threshold: 20 },
+                            { location: 'Transit', sku: 'SKU003', quantity: 30, threshold: 10 },
+                            { location: 'Quality Control', sku: 'SKU004', quantity: 120, threshold: 40 },
+                        ]);
+                    } else if (url === '/api/recent_activity') {
+                        resolve([
+                            { user: 'John Doe', action: 'Scanned SKU005', timestamp: '2024-01-20 10:00', status: 'success' },
+                            { user: 'Jane Smith', action: 'Moved SKU001 to Warehouse A', timestamp: '2024-01-20 10:15', status: 'success' },
+                            { user: 'Peter Jones', action: 'Adjusted stock for SKU002', timestamp: '2024-01-20 10:30', status: 'warning' },
+                        ]);
+                    } else if (url === '/api/warehouse_zones') {
+                        resolve([
+                            { warehouse: 'Warehouse A', zone: 'Aisle 1', utilization: 0.75 },
+                            { warehouse: 'Warehouse A', zone: 'Aisle 2', utilization: 0.50 },
+                            { warehouse: 'Warehouse B', zone: 'Aisle 1', utilization: 0.25 },
+                            { warehouse: 'Warehouse B', zone: 'Aisle 2', utilization: 0.90 },
+                        ]);
+                    } else if (url === '/api/interwarehouse_transfers') {
+                        resolve([
+                            { from: 'Warehouse A', to: 'Warehouse B', sku: 'SKU001', quantity: 50, status: 'Pending' },
+                            { from: 'Warehouse B', to: 'Warehouse A', sku: 'SKU002', quantity: 20, status: 'Completed' },
+                        ]);
+                    }
+                     else if (url === '/api/gs1_data') {
+                        resolve({
+                          sku: 'SKU-12345',
+                          lot: 'LOT202401',
+                          expiry: '2025-12-31',
+                          weight: '1.25 kg'
+                        });
+                    }
+                    else {
+                        resolve([]);
+                    }
+                }, 500);
+            });
+        };
+
+        const StockLevelsWidget = ({ stockLevels }) => (
+            <div className="glass p-4 rounded-lg shadow-md">
+                <h2 className="text-lg font-semibold mb-2">Stock Levels</h2>
+                {stockLevels.length > 0 ? (
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="text-left">
+                                <th className="py-2">Location</th>
+                                <th className="py-2">SKU</th>
+                                <th className="py-2">Quantity</th>
+                                <th className="py-2">Threshold</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {stockLevels.map((item, index) => (
+                                <tr key={index} className="border-b border-gray-700">
+                                    <td className="py-2">{item.location}</td>
+                                    <td className="py-2">{item.sku}</td>
+                                    <td className="py-2">{item.quantity}</td>
+                                    <td className="py-2">{item.threshold}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <p>No stock level data available.</p>
+                )}
+            </div>
+        );
+
+        const RecentActivityWidget = ({ recentActivity }) => (
+            <div className="glass p-4 rounded-lg shadow-md">
+                <h2 className="text-lg font-semibold mb-2">Recent Activity</h2>
+                {recentActivity.length > 0 ? (
+                    <ul>
+                        {recentActivity.map((item, index) => (
+                            <li key={index} className="py-1 flex items-center justify-between border-b border-gray-700 last:border-b-0">
+                                <div>
+                                    <span className="font-semibold">{item.user}</span> - {item.action}
+                                    <p className="text-sm text-gray-400">{item.timestamp}</p>
+                                </div>
+                                {item.status === 'success' ? (
+                                    <CheckCircle className="text-green-500" size={20} />
+                                ) : item.status === 'warning' ? (
+                                    <AlertTriangle className="text-yellow-500" size={20} />
+                                ) : null}
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p>No recent activity data available.</p>
+                )}
+            </div>
+        );
+
+        const WarehouseZonesWidget = ({ warehouseZones }) => (
+            <div className="glass p-4 rounded-lg shadow-md">
+                <h2 className="text-lg font-semibold mb-2">Warehouse Zones</h2>
+                {warehouseZones.length > 0 ? (
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="text-left">
+                                <th className="py-2">Warehouse</th>
+                                <th className="py-2">Zone</th>
+                                <th className="py-2">Utilization</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {warehouseZones.map((item, index) => (
+                                <tr key={index} className="border-b border-gray-700">
+                                    <td className="py-2">{item.warehouse}</td>
+                                    <td className="py-2">{item.zone}</td>
+                                    <td className="py-2">{item.utilization * 100}%</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <p>No warehouse zone data available.</p>
+                )}
+            </div>
+        );
+
+        const InterWarehouseTransfersWidget = ({ interwarehouseTransfers }) => (
+            <div className="glass p-4 rounded-lg shadow-md">
+                <h2 className="text-lg font-semibold mb-2">Inter-Warehouse Transfers</h2>
+                {interwarehouseTransfers.length > 0 ? (
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="text-left">
+                                <th className="py-2">From</th>
+                                <th className="py-2">To</th>
+                                <th className="py-2">SKU</th>
+                                <th className="py-2">Quantity</th>
+                                <th className="py-2">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {interwarehouseTransfers.map((item, index) => (
+                                <tr key={index} className="border-b border-gray-700">
+                                    <td className="py-2">{item.from}</td>
+                                    <td className="py-2">{item.to}</td>
+                                    <td className="py-2">{item.sku}</td>
+                                    <td className="py-2">{item.quantity}</td>
+                                    <td className="py-2">{item.status}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <p>No inter-warehouse transfer data available.</p>
+                )}
+            </div>
+        );
+
+        const Dashboard = () => {
+            const [stockLevels, setStockLevels] = useState([]);
+            const [recentActivity, setRecentActivity] = useState([]);
+            const [warehouseZones, setWarehouseZones] = useState([]);
+            const [interwarehouseTransfers, setInterwarehouseTransfers] = useState([]);
+
+            useEffect(() => {
+                fetchData('/api/stock_levels').then(data => setStockLevels(data));
+                fetchData('/api/recent_activity').then(data => setRecentActivity(data));
+                fetchData('/api/warehouse_zones').then(data => setWarehouseZones(data));
+                fetchData('/api/interwarehouse_transfers').then(data => setInterwarehouseTransfers(data));
+            }, []);
+
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                  <StockLevelsWidget stockLevels={stockLevels} />
+                  <RecentActivityWidget recentActivity={recentActivity} />
+                  <WarehouseZonesWidget warehouseZones={warehouseZones} />
+                  <InterWarehouseTransfersWidget interwarehouseTransfers={interwarehouseTransfers} />
+                </div>
+            );
+        };
+
+        const SettingsComponent = () => {
+            const [settings, setSettings] = useState({
+                notificationsEnabled: true,
+                theme: 'dark',
+                language: 'en'
+            });
+
+            const handleChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                setSettings(prevSettings => ({
+                    ...prevSettings,
+                    [name]: type === 'checkbox' ? checked : value
+                }));
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                alert(JSON.stringify(settings)); // Simulate saving settings
+            };
+
+            return (
+                <div className="glass p-4 rounded-lg shadow-md w-full max-w-md">
+                    <h2 className="text-lg font-semibold mb-4">Settings</h2>
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Notifications:</label>
+                            <input
+                                type="checkbox"
+                                name="notificationsEnabled"
+                                checked={settings.notificationsEnabled}
+                                onChange={handleChange}
+                                className="mr-2 leading-tight"
+                            />
+                            <span>Enable Notifications</span>
+                        </div>
+
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Theme:</label>
+                            <select
+                                name="theme"
+                                value={settings.theme}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            >
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Language:</label>
+                            <select
+                                name="language"
+                                value={settings.language}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            >
+                                <option value="en">English</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Save Settings
+                        </button>
+                    </form>
+                </div>
+            );
+        };
+
+        const Profile = () => {
+            const [profileData, setProfileData] = useState({
+                name: 'John Doe',
+                email: 'john.doe@example.com',
+                location: 'New York'
+            });
+
+            const handleChange = (e) => {
+                const { name, value } = e.target;
+                setProfileData(prevData => ({
+                    ...prevData,
+                    [name]: value
+                }));
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                alert(JSON.stringify(profileData)); // Simulate updating profile
+            };
+
+            return (
+                <div className="glass p-4 rounded-lg shadow-md w-full max-w-md">
+                    <h2 className="text-lg font-semibold mb-4">Profile</h2>
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Name:</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={profileData.name}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            />
+                        </div>
+
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Email:</label>
+                            <input
+                                type="email"
+                                name="email"
+                                value={profileData.email}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            />
+                        </div>
+
+                        <div className="mb-2">
+                            <label className="block text-sm font-medium mb-1">Location:</label>
+                            <input
+                                type="text"
+                                name="location"
+                                value={profileData.location}
+                                onChange={handleChange}
+                                className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                            />
+                        </div>
+
+                        <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                            Update Profile
+                        </button>
+                    </form>
+                </div>
+            );
+        };
+
+        const ActivityLog = () => {
+            const [activityLogs, setActivityLogs] = useState([]);
+
+            useEffect(() => {
+                // Simulate fetching activity log data
+                fetchData('/api/recent_activity').then(data => setActivityLogs(data));
+            }, []);
+
+            return (
+                <div className="glass p-4 rounded-lg shadow-md">
+                    <h2 className="text-lg font-semibold mb-4">Activity Log</h2>
+                    <ul>
+                        {activityLogs.map((log, index) => (
+                            <li key={index} className="py-2 border-b border-gray-700 last:border-b-0">
+                                <span className="font-semibold">{log.user}</span> - {log.action}
+                                <p className="text-sm text-gray-400">{log.timestamp}</p>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            );
+        };
+
+        const BarcodeScannerInterface = () => {
+          const [barcodeData, setBarcodeData] = useState(null);
+          const [isScanning, setIsScanning] = useState(false);
+          const [gs1Data, setGs1Data] = useState(null);
+
+          const handleScan = () => {
+            setIsScanning(true);
+            // Simulate barcode scanning
+            setTimeout(() => {
+              const fakeBarcode = '01001234567890121725123110LOT123456'; // Example GS1-128
+              setBarcodeData(fakeBarcode);
+              setIsScanning(false);
+               fetchData('/api/gs1_data').then(data => setGs1Data(data)); // Mock GS1 data fetching
+            }, 2000);
+          };
+
+          return (
+            <div className="glass p-4 rounded-lg shadow-md">
+              <h2 className="text-lg font-semibold mb-4">Barcode Scanner</h2>
+              {!barcodeData ? (
+                <button
+                  onClick={handleScan}
+                  disabled={isScanning}
+                  className={`bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${
+                    isScanning ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isScanning ? 'Scanning...' : 'Start Scanning'}
+                </button>
+              ) : (
+                <div>
+                  <p className="mb-2">
+                    <span className="font-semibold">Raw Barcode Data:</span> {barcodeData}
+                  </p>
+                     {gs1Data && (
+                      <div>
+                        <p className="mb-2">
+                          <span className="font-semibold">Parsed SKU:</span> {gs1Data.sku}
+                        </p>
+                        <p className="mb-2">
+                          <span className="font-semibold">Lot Number:</span> {gs1Data.lot}
+                        </p>
+                        <p className="mb-2">
+                          <span className="font-semibold">Expiry Date:</span> {gs1Data.expiry}
+                        </p>
+                        <p className="mb-2">
+                          <span className="font-semibold">Weight:</span> {gs1Data.weight}
+                        </p>
+                      </div>
+                    )}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const SmartTransferWizard = () => {
+          const [fromWarehouse, setFromWarehouse] = useState('');
+          const [toWarehouse, setToWarehouse] = useState('');
+          const [sku, setSku] = useState('');
+          const [quantity, setQuantity] = useState(1);
+          const [transferStatus, setTransferStatus] = useState(null);
+
+          const handleTransfer = () => {
+            // Simulate transfer logic
+            setTransferStatus('Transferring...');
+            setTimeout(() => {
+              setTransferStatus(`Successfully transferred ${quantity} of ${sku} from ${fromWarehouse} to ${toWarehouse}`);
+            }, 1500);
+          };
+
+          return (
+            <div className="glass p-4 rounded-lg shadow-md">
+              <h2 className="text-lg font-semibold mb-4">Smart Transfer Wizard</h2>
+
+              <div className="mb-2">
+                <label className="block text-sm font-medium mb-1">From Warehouse:</label>
+                <input
+                  type="text"
+                  value={fromWarehouse}
+                  onChange={(e) => setFromWarehouse(e.target.value)}
+                  className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div className="mb-2">
+                <label className="block text-sm font-medium mb-1">To Warehouse:</label>
+                <input
+                  type="text"
+                  value={toWarehouse}
+                  onChange={(e) => setToWarehouse(e.target.value)}
+                  className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div className="mb-2">
+                <label className="block text-sm font-medium mb-1">SKU:</label>
+                <input
+                  type="text"
+                  value={sku}
+                  onChange={(e) => setSku(e.target.value)}
+                  className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div className="mb-2">
+                <label className="block text-sm font-medium mb-1">Quantity:</label>
+                <input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value))}
+                  className="glass shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                />
+              </div>
+
+              <button
+                onClick={handleTransfer}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+              >
+                Initiate Transfer
+              </button>
+
+              {transferStatus && <p className="mt-4">{transferStatus}</p>}
+            </div>
+          );
+        };
+
+        const WarehouseHeatmap = () => {
+            // Placeholder data for the heatmap
+            const heatmapData = [
+                { zone: 'Aisle 1', utilization: 0.8 },
+                { zone: 'Aisle 2', utilization: 0.5 },
+                { zone: 'Aisle 3', utilization: 0.2 },
+                { zone: 'Aisle 4', utilization: 0.9 },
+            ];
+
+            return (
+                <div className="glass p-4 rounded-lg shadow-md">
+                    <h2 className="text-lg font-semibold mb-4">Warehouse Heatmap</h2>
+                    {/* Placeholder for the actual heatmap visualization */}
+                    <div className="bg-gray-800 p-4 rounded-md text-center">
+                        Heatmap Visualization (Canvas Placeholder)
+                    </div>
+                    <ul className="mt-4">
+                        {heatmapData.map((item, index) => (
+                            <li key={index} className="py-2">
+                                {item.zone}: {Math.round(item.utilization * 100)}% Utilization
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [activePage, setActivePage] = useState('dashboard');
+
+            const renderPage = () => {
+                switch (activePage) {
+                    case 'dashboard':
+                        return <Dashboard />;
+                    case 'barcodeScanner':
+                        return <BarcodeScannerInterface />;
+                    case 'transferWizard':
+                        return <SmartTransferWizard />;
+                    case 'warehouseHeatmap':
+                        return <WarehouseHeatmap />;
+                    case 'settings':
+                        return <SettingsComponent />;
+                    case 'profile':
+                        return <Profile />;
+                    case 'activity':
+                        return <ActivityLog />;
+                    default:
+                        return <Dashboard />;
+                }
+            };
+
+            return (
+                <div className="flex h-screen">
+                    {/* Sidebar */}
+                    <div className="w-64 bg-gray-900 glass flex flex-col">
+                        <div className="p-4">
+                            <h1 className="text-2xl font-semibold">Odoo Inventory</h1>
+                        </div>
+                        <nav className="flex-1 p-4">
+                            <ul>
+                                <li className="mb-2">
+                                    <a href="#" onClick={() => setActivePage('dashboard')} className="flex items-center hover:text-indigo-400">
+                                        <Home className="mr-2" size={20} />
+                                        Dashboard
+                                    </a>
+                                </li>
+                                <li className="mb-2">
+                                    <a href="#" onClick={() => setActivePage('barcodeScanner')} className="flex items-center hover:text-indigo-400">
+                                        <Barcode className="mr-2" size={20} />
+                                        Barcode Scanner
+                                    </a>
+                                </li>
+                                <li className="mb-2">
+                                    <a href="#" onClick={() => setActivePage('transferWizard')} className="flex items-center hover:text-indigo-400">
+                                        <ArrowRight className="mr-2" size={20} />
+                                        Transfer Wizard
+                                    </a>
+                                </li>
+                                 <li className="mb-2">
+                                    <a href="#" onClick={() => setActivePage('warehouseHeatmap')} className="flex items-center hover:text-indigo-400">
+                                        <Map className="mr-2" size={20} />
+                                        Warehouse Heatmap
+                                    </a>
+                                </li>
+                                <li className="mb-2">
+                                    <a href="#" onClick={() => setActivePage('settings')} className="flex items-center hover:text-indigo-400">
+                                        <Settings className="mr-2" size={20} />
+                                        Settings
+                                    </a>
+                                </li>
+                                <li className="mb-2">
+                                    <a href="#" onClick={() => setActivePage('profile')} className="flex items-center hover:text-indigo-400">
+                                        <User className="mr-2" size={20} />
+                                        Profile
+                                    </a>
+                                </li>
+                                <li className="mb-2">
+                                    <a href="#" onClick={() => setActivePage('activity')} className="flex items-center hover:text-indigo-400">
+                                        <Activity className="mr-2" size={20} />
+                                        Activity
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col">
+                        {/* Navbar */}
+                        <div className="bg-gray-800 h-16 flex items-center justify-between p-4 glass">
+                            <div className="flex items-center">
+                                <Search className="mr-2" size={20} />
+                                <input type="text" placeholder="Search..." className="glass p-2 rounded" />
+                            </div>
+                            <div>
+                                <User className="mr-2 inline-block" size={20} />
+                                John Doe
+                            </div>
+                        </div>
+
+                        {/* Page Content */}
+                        <div className="p-4 flex-1 overflow-y-auto">
+                            {renderPage()}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
