@@ -124,14 +124,8 @@
             };
 
             const handleEditItem = (index) => {
-              const itemName = prompt("Enter the new item name:", inventoryItems[index].name);
-              const itemQuantity = prompt("Enter the new item quantity:", inventoryItems[index].quantity);
-
-                if (itemName !== null && itemQuantity !== null) {
-                    const updatedItems = [...inventoryItems];
-                    updatedItems[index] = { name: itemName, quantity: parseInt(itemQuantity)};
-                    setInventoryItems(updatedItems);
-                }
+              // Placeholder for edit functionality
+              alert(`Editing item at index: ${index}`);
             };
 
             return (
@@ -645,3 +639,6 @@
                         <table className="min-w-full divide-y divide-gray-700">
                             <thead>
                                 <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Order ID</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Customer</th>
+                                    <th className="
