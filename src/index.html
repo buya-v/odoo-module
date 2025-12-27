@@ -181,6 +181,29 @@
             </div>
         );
 
+         const GS1DataDisplay = ({ gs1Data }) => {
+            if (!gs1Data) {
+              return <p>No GS1 data available.</p>;
+            }
+
+            return (
+              <div>
+                <p className="mb-2">
+                  <span className="font-semibold">Parsed SKU:</span> {gs1Data.sku}
+                </p>
+                <p className="mb-2">
+                  <span className="font-semibold">Lot Number:</span> {gs1Data.lot}
+                </p>
+                <p className="mb-2">
+                  <span className="font-semibold">Expiry Date:</span> {gs1Data.expiry}
+                </p>
+                <p className="mb-2">
+                  <span className="font-semibold">Weight:</span> {gs1Data.weight}
+                </p>
+              </div>
+            );
+          };
+
         const Dashboard = () => {
             const [stockLevels, setStockLevels] = useState([]);
             const [recentActivity, setRecentActivity] = useState([]);
@@ -400,20 +423,7 @@
                     <span className="font-semibold">Raw Barcode Data:</span> {barcodeData}
                   </p>
                      {gs1Data && (
-                      <div>
-                        <p className="mb-2">
-                          <span className="font-semibold">Parsed SKU:</span> {gs1Data.sku}
-                        </p>
-                        <p className="mb-2">
-                          <span className="font-semibold">Lot Number:</span> {gs1Data.lot}
-                        </p>
-                        <p className="mb-2">
-                          <span className="font-semibold">Expiry Date:</span> {gs1Data.expiry}
-                        </p>
-                        <p className="mb-2">
-                          <span className="font-semibold">Weight:</span> {gs1Data.weight}
-                        </p>
-                      </div>
+                      <GS1DataDisplay gs1Data={gs1Data} />
                     )}
                 </div>
               )}
