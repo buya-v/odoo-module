@@ -19,7 +19,7 @@
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const { Home, Package, Settings, User, Activity, Barcode, ArrowRight, ArrowLeft, File, AlertTriangle, CheckCircle, Truck, Map, Layers } = LucideReact;
+        const { Home, Package, Settings, User, Activity, Barcode, ArrowRight, ArrowLeft, File, AlertTriangle, CheckCircle, Truck, Map, Layers, Plus, Edit, Trash2, Search, XCircle } = LucideReact;
 
         const Sidebar = () => {
             return (
@@ -108,17 +108,30 @@
             return (
                 <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
                     <h3 className="text-lg font-semibold mb-2">Inventory Items</h3>
-                    <ul>
-                        {items.map((item, index) => (
-                            <li key={index} className="py-2 border-b border-gray-700 last:border-b-0">
-                                <div className="flex justify-between items-center">
-                                    <span>{item.name}</span>
-                                    <span className="text-gray-400">Quantity: {item.quantity}</span>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-700">
+                        <thead>
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Quantity</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                          {items.map((item, index) => (
+                            <tr key={index}>
+                              <td className="px-6 py-4 whitespace-nowrap">{item.name}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">{item.quantity}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <button className="text-blue-500 hover:text-blue-700 mr-2"><Edit className="h-4 w-4" /></button>
+                                <button className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
             );
         };
 
@@ -245,46 +258,139 @@
         }
 
         const ActivityLog = () => {
-          const activities = [
+          const [activities, setActivities] = useState([
             { id: 1, user: "John Doe", action: "Scanned Item", timestamp: "2024-01-01 10:00:00" },
             { id: 2, user: "Jane Smith", action: "Transfered Item", timestamp: "2024-01-01 10:05:00" },
             { id: 3, user: "Peter Jones", action: "Adjusted Inventory", timestamp: "2024-01-01 10:10:00" },
-          ];
+          ]);
+
+          const handleDeleteActivity = (id) => {
+            setActivities(activities.filter(activity => activity.id !== id));
+          };
 
           return (
             <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
               <h3 className="text-lg font-semibold mb-2">Activity Log</h3>
-              <ul>
-                {activities.map((activity) => (
-                  <li key={activity.id} className="py-2 border-b border-gray-700 last:border-b-0">
-                    <div className="flex justify-between items-center">
-                      <span>{activity.user} - {activity.action}</span>
-                      <span className="text-gray-400">{activity.timestamp}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Action</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Timestamp</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {activities.map((activity) => (
+                      <tr key={activity.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">{activity.user}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{activity.action}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{activity.timestamp}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button className="text-red-500 hover:text-red-700" onClick={() => handleDeleteActivity(activity.id)}><Trash2 className="h-4 w-4" /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           );
         };
 
         const SettingsPanel = () => {
+          const [notificationEnabled, setNotificationEnabled] = useState(true);
+          const [theme, setTheme] = useState("dark");
+
+          const handleNotificationToggle = () => {
+            setNotificationEnabled(!notificationEnabled);
+          };
+
+          const handleThemeChange = (e) => {
+            setTheme(e.target.value);
+          };
+
           return (
             <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
               <h3 className="text-lg font-semibold mb-2">Settings</h3>
-              <p className="text-gray-300">Configure your inventory settings.</p>
-              {/* Add settings form elements here */}
-              <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4">Save Settings</button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Notifications:</label>
+                  <button
+                    className={`px-4 py-2 rounded-md font-bold ${notificationEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white"}`}
+                    onClick={handleNotificationToggle}
+                  >
+                    {notificationEnabled ? "Enabled" : "Disabled"}
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Theme:</label>
+                  <select
+                    className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    value={theme}
+                    onChange={handleThemeChange}
+                  >
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                </div>
+                <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4">Save Settings</button>
+              </div>
             </div>
           );
         };
 
         const ProfilePanel = () => {
+          const [name, setName] = useState("Admin User");
+          const [email, setEmail] = useState("admin@example.com");
+          const [isEditing, setIsEditing] = useState(false);
+
+          const handleSave = () => {
+            setIsEditing(false);
+            // Save profile logic here (e.g., API call)
+            alert("Profile updated!");
+          };
+
           return (
             <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
               <h3 className="text-lg font-semibold mb-2">Profile</h3>
-              <p className="text-gray-300">View and edit your profile information.</p>
-              {/* Add profile information elements here */}
+              {isEditing ? (
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Name:</label>
+                    <input
+                      type="text"
+                      className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Email:</label>
+                    <input
+                      type="email"
+                      className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" onClick={handleSave}>
+                    Save
+                  </button>
+                  <button className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" onClick={() => setIsEditing(false)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p><strong>Name:</strong> {name}</p>
+                  <p><strong>Email:</strong> {email}</p>
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" onClick={() => setIsEditing(true)}>
+                    Edit Profile
+                  </button>
+                </div>
+              )}
             </div>
           );
         };
