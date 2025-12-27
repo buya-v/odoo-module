@@ -17,7 +17,7 @@
             background-color: #020617; 
             color: #f8fafc; 
             font-family: 'Inter', sans-serif; 
-            overflow: hidden; /* App-like feel */
+            overflow: hidden; 
         }
         
         /* Glassmorphism Utilities */
@@ -33,11 +33,10 @@
             border-right: 1px solid rgba(255,255,255,0.08); 
         }
 
-        /* Odoo Branding */
+        /* Odoo Branding & Status Colors */
         .odoo-purple { color: #714B67; }
         .bg-odoo-purple { background-color: #714B67; }
         .border-odoo-purple { border-color: #714B67; }
-        .hover-bg-odoo:hover { background-color: #5a3b52; }
         
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -61,14 +60,10 @@
             animation: scan-move 2.5s infinite linear;
         }
 
-        /* Animations */
+        /* Utility Animations */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
         
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in-up { animation: fadeInUp 0.3s ease-out; }
-
-        /* Utility */
         .text-xxs { font-size: 0.65rem; }
     </style>
 </head>
@@ -80,19 +75,19 @@
             LayoutDashboard, Scan, Map, Truck, History, Settings, 
             Bell, User, ChevronRight, Package, Box, AlertTriangle, 
             CheckCircle, Search, Wifi, WifiOff, Camera, X, RefreshCw,
-            ArrowRightLeft, Database, MoreVertical, Filter, Download
+            ArrowRightLeft, Database, MoreVertical, Filter, Download,
+            QrCode, PlayCircle, Plus
         } = lucideReact;
 
-        // --- MOCK DATA GENERATORS ---
-
-        const generateWarehouses = () => [
+        // --- MOCK DATA ---
+        const WAREHOUSES = [
             { id: 1, name: "WH-Main (San Francisco)", code: "WH", type: "Distribution", fill: 78, capacity: 15000, onHand: 11700 },
             { id: 2, name: "WH-Transit (Virtual)", code: "TRN", type: "Transit", fill: 12, capacity: 5000, onHand: 600 },
             { id: 3, name: "WH-Quality (QC)", code: "QC", type: "Quality Control", fill: 45, capacity: 2000, onHand: 900 },
             { id: 4, name: "WH-East (New York)", code: "NY", type: "Fulfillment", fill: 92, capacity: 10000, onHand: 9200 },
         ];
 
-        const generateZones = () => Array.from({ length: 48 }, (_, i) => ({
+        const GENERATE_ZONES = () => Array.from({ length: 48 }, (_, i) => ({
             id: `Z-${i+1}`,
             code: `A${Math.floor(i/12) + 1}-R${(i%12) + 1}`,
             utilization: Math.floor(Math.random() * 100),
@@ -100,7 +95,7 @@
             category: i < 12 ? 'Cold Storage' : 'Ambient'
         }));
 
-        const generateLogs = () => [
+        const MOCK_LOGS = [
             { id: 101, user: "Mitchel Admin", action: "SCAN_IN", sku: "(01)93847(10)L99", loc: "WH/Stock/A1", time: "10:42 AM", status: "success" },
             { id: 102, user: "Marc Demo", action: "TRANSFER", sku: "FURN_7777", loc: "WH -> QC", time: "10:30 AM", status: "warning" },
             { id: 103, user: "Joel Willis", action: "SCAN_OUT", sku: "(01)11223(17)2412", loc: "WH/Output", time: "09:15 AM", status: "success" },
@@ -108,9 +103,9 @@
             { id: 105, user: "System", action: "AUTO_REORDER", sku: "BOLT-002", loc: "WH/Stock/C4", time: "08:55 AM", status: "success" },
         ];
 
-        // --- SUB-COMPONENTS ---
+        // --- COMPONENTS ---
 
-        // 1. Sidebar Component
+        // 1. Sidebar
         const Sidebar = ({ activeView, setView }) => {
             const menuItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -121,19 +116,19 @@
             ];
 
             return (
-                <div className="w-64 h-full glass-solid flex flex-col z-50 transition-all">
+                <div className="w-64 h-full glass-solid flex flex-col z-50 transition-all border-r border-white/5">
                     <div className="h-16 flex items-center px-6 border-b border-white/5">
                         <div className="w-8 h-8 bg-odoo-purple rounded-lg flex items-center justify-center mr-3 shadow-lg shadow-purple-900/50">
                             <span className="font-bold text-white text-xl">O</span>
                         </div>
                         <div>
-                            <h1 className="font-bold text-base tracking-tight text-white">Odoo Inventory</h1>
+                            <h1 className="font-bold text-base tracking-tight text-white">Inventory</h1>
                             <p className="text-xs text-slate-500">v18.0 Enterprise</p>
                         </div>
                     </div>
 
                     <div className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-                        <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Operations</p>
+                        <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Modules</p>
                         {menuItems.map((item) => (
                             <button
                                 key={item.id}
@@ -151,327 +146,106 @@
                     </div>
 
                     <div className="p-4 border-t border-white/5">
-                        <button className="flex items-center w-full p-2 hover:bg-slate-800 rounded-lg transition-colors">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white shadow-inner">
+                        <button className="flex items-center w-full p-2 hover:bg-slate-800 rounded-lg transition-colors group">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white shadow-inner border border-white/10">
                                 MA
                             </div>
                             <div className="ml-3 text-left">
-                                <p className="text-sm font-medium text-white">Mitchell Admin</p>
+                                <p className="text-sm font-medium text-white group-hover:text-purple-300">Mitchell Admin</p>
                                 <p className="text-xs text-slate-500">Warehouse Manager</p>
                             </div>
-                            <Settings size={16} className="ml-auto text-slate-500" />
+                            <Settings size={16} className="ml-auto text-slate-500 group-hover:rotate-90 transition-transform" />
                         </button>
                     </div>
                 </div>
             );
         };
 
-        // 2. Top Navigation
-        const Topbar = () => {
+        // 2. Dashboard
+        const Dashboard = ({ setView }) => {
             return (
-                <header className="h-16 glass sticky top-0 z-40 px-6 flex items-center justify-between">
-                    <div className="flex items-center text-slate-400 bg-slate-900/50 px-3 py-1.5 rounded-md border border-slate-700/50 w-96 transition-colors focus-within:border-odoo-purple focus-within:ring-1 focus-within:ring-odoo-purple">
-                        <Search size={16} className="mr-3" />
-                        <input 
-                            type="text" 
-                            placeholder="Search SKU, Serial Number, or Transfer..." 
-                            className="bg-transparent border-none focus:ring-0 text-sm w-full text-white placeholder-slate-500 outline-none"
-                        />
-                        <span className="text-xs border border-slate-700 rounded px-1.5 py-0.5 text-slate-500">Ctrl+K</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-4">
-                        <div className="flex items-center text-green-400 text-xs font-medium px-2.5 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
-                            <Wifi size={12} className="mr-1.5" /> 
-                            <span>Connected</span>
-                        </div>
-                        
-                        <div className="h-6 w-px bg-slate-700 mx-2"></div>
-
-                        <button className="relative text-slate-400 hover:text-white transition-colors">
-                            <Bell size={20} />
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-[#020617]"></span>
-                        </button>
-                        <button className="text-slate-400 hover:text-white transition-colors">
-                            <Box size={20} />
-                        </button>
-                    </div>
-                </header>
-            );
-        };
-
-        // 3. KPI Widget
-        const KpiCard = ({ title, value, subtitle, trend, trendLabel, icon: Icon, color }) => (
-            <div className="glass p-5 rounded-xl relative overflow-hidden group transition-all duration-300 hover:-translate-y-1">
-                <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity ${color}`}>
-                    <Icon size={80} />
-                </div>
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">{title}</h3>
-                    <div className={`p-2 rounded-lg bg-slate-800/50 ${color.replace('text-', 'text-opacity-80 text-')}`}>
-                        <Icon size={18} />
-                    </div>
-                </div>
-                <div className="flex items-baseline mb-1">
-                    <span className="text-2xl font-bold text-white tracking-tight">{value}</span>
-                </div>
-                <div className="flex items-center text-xs">
-                    <span className={`font-medium ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {trend > 0 ? '+' : ''}{trend}%
-                    </span>
-                    <span className="text-slate-500 ml-1.5">{trendLabel}</span>
-                </div>
-            </div>
-        );
-
-        // 4. Warehouse Progress
-        const WarehouseWidget = ({ data }) => (
-            <div className="glass rounded-xl p-6 h-full">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-base font-semibold text-white">Storage Capacity</h3>
-                    <button className="text-xs text-odoo-purple hover:text-white transition-colors">View All</button>
-                </div>
-                <div className="space-y-6">
-                    {data.map(wh => (
-                        <div key={wh.id} className="group">
-                            <div className="flex justify-between text-sm mb-2">
-                                <div className="flex items-center">
-                                    <span className={`w-2 h-2 rounded-full mr-2 group-hover:scale-125 transition-transform ${wh.fill > 90 ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                                    <span className="text-white font-medium">{wh.name}</span>
-                                    <span className="ml-2 text-xs text-slate-500 bg-slate-800 px-1.5 rounded">{wh.code}</span>
-                                </div>
-                                <span className="text-slate-400 text-xs font-mono">{wh.onHand.toLocaleString()} / {wh.capacity.toLocaleString()}</span>
-                            </div>
-                            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                                <div 
-                                    className={`h-full rounded-full transition-all duration-1000 ${
-                                        wh.fill > 90 ? 'bg-red-500' : wh.fill > 75 ? 'bg-yellow-500' : 'bg-odoo-purple'
-                                    }`} 
-                                    style={{ width: `${wh.fill}%` }}
-                                ></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-
-        // 5. Dashboard View
-        const Dashboard = () => {
-            const warehouses = useMemo(() => generateWarehouses(), []);
-
-            return (
-                <div className="space-y-6 animate-fade-in pb-10">
+                <div className="space-y-6 animate-fade-in pb-10 h-full overflow-y-auto">
+                    {/* Header */}
                     <div className="flex justify-between items-end">
                         <div>
-                            <h2 className="text-2xl font-bold text-white">Inventory Overview</h2>
-                            <p className="text-slate-400 text-sm mt-1">Real-time metrics across 4 warehouse nodes.</p>
+                            <h2 className="text-2xl font-bold text-white">Dashboard</h2>
+                            <p className="text-slate-400 text-sm mt-1">Real-time inventory metrics across 4 nodes.</p>
                         </div>
                         <div className="flex gap-3">
-                            <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-sm font-medium border border-slate-600 transition-colors">
+                            <button className="glass px-3 py-2 rounded-lg text-slate-300 hover:text-white text-sm font-medium transition-colors">
                                 <Filter size={16} />
                             </button>
-                            <button className="bg-odoo-purple hover:bg-[#5a3b52] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-colors shadow-lg shadow-purple-900/20">
-                                <Scan size={16} className="mr-2" />
-                                Process Batch
+                            <button onClick={() => setView('scanner')} className="bg-odoo-purple hover:bg-[#5a3b52] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-colors shadow-lg shadow-purple-900/20">
+                                <Scan size={16} className="mr-2" /> Process Batch
                             </button>
                         </div>
                     </div>
 
-                    {/* KPI Grid */}
+                    {/* KPI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <KpiCard title="Items On Hand" value="14,205" trend={12} trendLabel="vs last week" icon={Package} color="text-blue-500" />
-                        <KpiCard title="Available to Promise" value="12,850" trend={-2} trendLabel="High reservations" icon={CheckCircle} color="text-purple-500" />
-                        <KpiCard title="Pending Transfers" value="48" trend={8} trendLabel="Expediting required" icon={ArrowRightLeft} color="text-yellow-500" />
-                        <KpiCard title="Accuracy Rate" value="99.2%" trend={0.4} trendLabel="Cycle count result" icon={Database} color="text-green-500" />
+                        {[
+                            { title: "On Hand", val: "14,205", icon: Package, color: "text-blue-500", trend: "+12%" },
+                            { title: "To Process", val: "48", icon: ArrowRightLeft, color: "text-yellow-500", trend: "+8%" },
+                            { title: "ATP Stock", val: "12,850", icon: CheckCircle, color: "text-purple-500", trend: "-2%" },
+                            { title: "Accuracy", val: "99.2%", icon: Database, color: "text-green-500", trend: "+0.4%" }
+                        ].map((kpi, idx) => (
+                            <div key={idx} className="glass p-5 rounded-xl relative overflow-hidden group hover:-translate-y-1 transition-transform">
+                                <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity ${kpi.color}`}>
+                                    <kpi.icon size={80} />
+                                </div>
+                                <div className="flex justify-between mb-4">
+                                    <h3 className="text-slate-400 text-xs font-bold uppercase">{kpi.title}</h3>
+                                    <kpi.icon size={18} className={kpi.color} />
+                                </div>
+                                <span className="text-2xl font-bold text-white block mb-1">{kpi.val}</span>
+                                <span className="text-xs text-slate-500"><span className={kpi.trend.includes('+') ? 'text-green-400' : 'text-red-400'}>{kpi.trend}</span> vs last week</span>
+                            </div>
+                        ))}
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Left: Capacity */}
-                        <div className="lg:col-span-2">
-                            <WarehouseWidget data={warehouses} />
+                        {/* Warehouse Capacity */}
+                        <div className="glass rounded-xl p-6 lg:col-span-2">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-base font-semibold text-white">Warehouse Utilization</h3>
+                                <button className="text-xs text-odoo-purple hover:text-white transition-colors">View Details</button>
+                            </div>
+                            <div className="space-y-6">
+                                {WAREHOUSES.map(wh => (
+                                    <div key={wh.id}>
+                                        <div className="flex justify-between text-sm mb-2">
+                                            <span className="text-white font-medium flex items-center">
+                                                <span className={`w-2 h-2 rounded-full mr-2 ${wh.fill > 90 ? 'bg-red-500' : wh.fill > 70 ? 'bg-yellow-500' : 'bg-green-500'}`}></span>
+                                                {wh.name}
+                                            </span>
+                                            <span className="text-slate-400 text-xs font-mono">{wh.onHand.toLocaleString()} / {wh.capacity.toLocaleString()}</span>
+                                        </div>
+                                        <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                            <div className={`h-full rounded-full transition-all duration-1000 ${wh.fill > 90 ? 'bg-red-500' : wh.fill > 70 ? 'bg-yellow-500' : 'bg-odoo-purple'}`} style={{ width: `${wh.fill}%` }}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
-                        {/* Right: Alerts */}
+                        {/* Alerts Feed */}
                         <div className="glass rounded-xl p-6 flex flex-col h-full">
                             <h3 className="text-base font-semibold text-white mb-4 flex items-center">
                                 <AlertTriangle size={18} className="text-yellow-500 mr-2" />
-                                Priority Alerts
+                                Action Required
                             </h3>
-                            <div className="space-y-3 flex-1 overflow-y-auto max-h-64 pr-2">
-                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg group hover:bg-red-500/20 transition-colors cursor-pointer">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h4 className="text-sm font-medium text-red-200">Stockout Risk</h4>
-                                        <span className="text-xxs text-red-400 bg-red-500/20 px-1 py-0.5 rounded uppercase font-bold">Critical</span>
-                                    </div>
-                                    <p className="text-xs text-red-300/70">SKU: FURN_8888 below min threshold (5 units) in WH-East.</p>
-                                </div>
-                                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg group hover:bg-yellow-500/20 transition-colors cursor-pointer">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h4 className="text-sm font-medium text-yellow-200">QC Bottleneck</h4>
-                                        <span className="text-xxs text-yellow-400 bg-yellow-500/20 px-1 py-0.5 rounded uppercase font-bold">Warning</span>
-                                    </div>
-                                    <p className="text-xs text-yellow-300/70">15 items pending in Quality Control > 24hrs.</p>
-                                </div>
-                                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg group hover:bg-blue-500/20 transition-colors cursor-pointer">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h4 className="text-sm font-medium text-blue-200">Incoming Shipment</h4>
-                                        <span className="text-xxs text-blue-400 bg-blue-500/20 px-1 py-0.5 rounded uppercase font-bold">Info</span>
-                                    </div>
-                                    <p className="text-xs text-blue-300/70">PO0032 arriving at Dock 4 in 30 mins.</p>
-                                </div>
-                            </div>
-                            <button className="mt-4 w-full py-2 text-xs text-slate-400 border border-slate-700 rounded hover:bg-slate-800 transition-colors">
-                                Dismiss All
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 6. Scanner Component
-        const Scanner = () => {
-            const [input, setInput] = useState('');
-            const [lastScan, setLastScan] = useState(null);
-            const [history, setHistory] = useState([]);
-            const [cameraActive, setCameraActive] = useState(true);
-
-            const handleScan = (e) => {
-                e.preventDefault();
-                if (!input) return;
-
-                // Mock Parser
-                let type = 'Standard 1D';
-                let parsed = { sku: input };
-                let status = 'success';
-                
-                // GS1 Simulation: (01)...(10)...
-                if (input.includes('(') && input.includes(')')) {
-                    type = 'GS1-128';
-                    const gtin = input.match(/\(01\)(\d+)/)?.[1] || 'Unknown';
-                    const lot = input.match(/\(10\)([a-zA-Z0-9]+)/)?.[1] || 'N/A';
-                    parsed = { gtin, lot };
-                }
-
-                // Error simulation
-                if (input.toLowerCase().includes('error')) status = 'error';
-
-                const scanObj = {
-                    id: Date.now(),
-                    raw: input,
-                    type,
-                    data: parsed,
-                    timestamp: new Date().toLocaleTimeString(),
-                    status
-                };
-
-                setLastScan(scanObj);
-                setHistory([scanObj, ...history]);
-                setInput('');
-            };
-
-            return (
-                <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-8rem)] animate-fade-in">
-                    {/* Camera Feed Area */}
-                    <div className="flex-1 flex flex-col">
-                        <div className="glass flex-1 rounded-2xl relative overflow-hidden flex flex-col border-2 border-slate-700/50">
-                            {/* Simulated Viewfinder */}
-                            <div className={`absolute inset-0 z-0 bg-black ${cameraActive ? '' : 'flex items-center justify-center'}`}>
-                                {cameraActive ? (
-                                    <>
-                                        <div className="w-full h-full bg-cover bg-center opacity-40 filter grayscale contrast-125" style={{backgroundImage: "url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1000')"}}></div>
-                                        <div className="scan-line top-1/2"></div>
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="w-64 h-48 border-2 border-white/40 rounded-lg relative">
-                                                <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-odoo-purple -mt-1 -ml-1"></div>
-                                                <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-odoo-purple -mt-1 -mr-1"></div>
-                                                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-odoo-purple -mb-1 -ml-1"></div>
-                                                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-odoo-purple -mb-1 -mr-1"></div>
-                                            </div>
+                            <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+                                {[
+                                    { type: 'Critical', msg: 'Stockout Risk: FURN_8888', wh: 'WH-East', color: 'red' },
+                                    { type: 'Warning', msg: 'QC Bottleneck: 15 items > 24h', wh: 'WH-Quality', color: 'yellow' },
+                                    { type: 'Info', msg: 'Inbound PO0032 arriving', wh: 'Dock 4', color: 'blue' }
+                                ].map((alert, i) => (
+                                    <div key={i} className={`p-3 rounded-lg border bg-${alert.color}-500/10 border-${alert.color}-500/20 hover:bg-${alert.color}-500/20 cursor-pointer transition-colors`}>
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className={`text-${alert.color}-200 text-sm font-medium`}>{alert.msg}</span>
+                                            <span className={`text-xxs uppercase font-bold text-${alert.color}-400 bg-${alert.color}-500/20 px-1.5 py-0.5 rounded`}>{alert.type}</span>
                                         </div>
-                                    </>
-                                ) : (
-                                    <div className="text-slate-600 flex flex-col items-center">
-                                        <WifiOff size={48} className="mb-2" />
-                                        <p>Camera Paused</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Controls Overlay */}
-                            <div className="absolute bottom-6 left-0 right-0 flex justify-center z-20 gap-4">
-                                <button onClick={() => setCameraActive(!cameraActive)} className="p-4 bg-slate-900/80 rounded-full text-white border border-slate-600 hover:bg-slate-800 transition shadow-lg">
-                                    {cameraActive ? <Camera size={24} /> : <RefreshCw size={24} />}
-                                </button>
-                                <form onSubmit={handleScan} className="flex gap-2 w-96 max-w-full px-4">
-                                    <input 
-                                        autoFocus
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        type="text" 
-                                        placeholder="Scan or Type Barcode..." 
-                                        className="flex-1 bg-slate-900/90 backdrop-blur border border-slate-600 rounded-lg px-4 text-white focus:border-odoo-purple outline-none shadow-xl"
-                                    />
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Side Panel: Results */}
-                    <div className="w-full lg:w-96 flex flex-col gap-4">
-                        {/* Current Scan Card */}
-                        <div className={`glass p-6 rounded-xl border-l-4 transition-all ${
-                            lastScan?.status === 'error' ? 'border-red-500 bg-red-500/5' : 
-                            lastScan?.status === 'success' ? 'border-green-500 bg-green-500/5' : 'border-slate-500'
-                        }`}>
-                            {lastScan ? (
-                                <div className="animate-fade-in-up">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${
-                                            lastScan.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                                        }`}>
-                                            {lastScan.status === 'success' ? 'Verified' : 'Invalid'}
-                                        </span>
-                                        <span className="text-xs text-slate-500">{lastScan.timestamp}</span>
-                                    </div>
-                                    <h2 className="text-lg font-mono font-bold text-white break-all mb-4">{lastScan.raw}</h2>
-                                    
-                                    {lastScan.type === 'GS1-128' && (
-                                        <div className="grid grid-cols-2 gap-2 mt-4">
-                                            <div className="bg-slate-900/50 p-2 rounded border border-white/5">
-                                                <label className="text-xxs text-slate-500 uppercase block">GTIN</label>
-                                                <span className="text-sm font-mono text-slate-200">{lastScan.data.gtin}</span>
-                                            </div>
-                                            <div className="bg-slate-900/50 p-2 rounded border border-white/5">
-                                                <label className="text-xxs text-slate-500 uppercase block">Batch/Lot</label>
-                                                <span className="text-sm font-mono text-slate-200">{lastScan.data.lot}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="h-40 flex flex-col items-center justify-center text-slate-500">
-                                    <Scan size={32} className="mb-2 opacity-50" />
-                                    <p className="text-sm">Ready to scan...</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* History List */}
-                        <div className="glass flex-1 rounded-xl overflow-hidden flex flex-col">
-                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-slate-900/50">
-                                <h3 className="text-sm font-semibold text-white">Session History</h3>
-                                <span className="text-xs text-slate-500">{history.length} scans</span>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                                {history.map((h) => (
-                                    <div key={h.id} className="flex items-center p-2 rounded hover:bg-slate-800/50 transition cursor-pointer group">
-                                        <div className={`w-1.5 h-1.5 rounded-full mr-3 ${h.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm text-slate-300 truncate font-mono">{h.raw}</p>
-                                        </div>
-                                        <span className="text-xs text-slate-600 group-hover:text-slate-400">{h.timestamp}</span>
+                                        <p className="text-xs text-slate-400">{alert.wh}</p>
                                     </div>
                                 ))}
                             </div>
@@ -481,46 +255,157 @@
             );
         };
 
-        // 7. Heatmap Component
-        const Heatmap = () => {
-            const zones = useMemo(() => generateZones(), []);
-            
+        // 3. Scanner Logic
+        const Scanner = () => {
+            const [scans, setScans] = useState([]);
+            const [input, setInput] = useState('');
+            const [active, setActive] = useState(true);
+
+            const handleScan = (e) => {
+                e.preventDefault();
+                if (!input) return;
+
+                let type = 'Code 128';
+                let parsed = { sku: input };
+                let status = 'success';
+
+                // GS1 Logic
+                if (input.includes('(') && input.includes(')')) {
+                    type = 'GS1-128';
+                    const gtin = input.match(/\(01\)(\d+)/)?.[1] || 'N/A';
+                    const lot = input.match(/\(10\)([a-zA-Z0-9]+)/)?.[1] || 'N/A';
+                    parsed = { gtin, lot };
+                }
+
+                if (input.toLowerCase().includes('error')) status = 'error';
+
+                setScans([{ id: Date.now(), raw: input, type, parsed, status, time: new Date().toLocaleTimeString() }, ...scans]);
+                setInput('');
+            };
+
             return (
-                <div className="h-full flex flex-col animate-fade-in">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold text-white flex items-center">
-                            Warehouse Map <span className="text-slate-500 text-sm font-normal ml-3">WH-Main / Zone A</span>
-                        </h2>
-                        <div className="flex gap-4 text-xs bg-slate-900/50 p-2 rounded-lg border border-slate-700">
-                            <div className="flex items-center text-slate-400"><div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded mr-2"></div> &lt; 50%</div>
-                            <div className="flex items-center text-slate-400"><div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500 rounded mr-2"></div> 50-85%</div>
-                            <div className="flex items-center text-slate-400"><div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded mr-2"></div> &gt; 85%</div>
+                <div className="flex flex-col lg:flex-row gap-6 h-full animate-fade-in pb-6">
+                    {/* Viewfinder */}
+                    <div className="flex-1 flex flex-col">
+                        <div className="glass flex-1 rounded-2xl relative overflow-hidden flex flex-col border border-slate-700">
+                            {active ? (
+                                <div className="absolute inset-0 bg-black">
+                                    <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center opacity-40"></div>
+                                    <div className="scan-line top-1/2"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="w-64 h-48 border-2 border-white/30 rounded-lg relative">
+                                            <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-odoo-purple -mt-1 -ml-1"></div>
+                                            <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-odoo-purple -mt-1 -mr-1"></div>
+                                            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-odoo-purple -mb-1 -ml-1"></div>
+                                            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-odoo-purple -mb-1 -mr-1"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-500">
+                                    <div className="text-center">
+                                        <WifiOff size={48} className="mx-auto mb-2 opacity-50" />
+                                        <p>Camera Paused</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Controls */}
+                            <div className="absolute bottom-6 w-full flex justify-center items-center gap-4 px-4 z-20">
+                                <button onClick={() => setActive(!active)} className="p-3 bg-slate-800 rounded-full text-white border border-slate-600 hover:bg-slate-700 shadow-lg">
+                                    {active ? <Camera size={20} /> : <RefreshCw size={20} />}
+                                </button>
+                                <form onSubmit={handleScan} className="flex-1 max-w-md">
+                                    <input 
+                                        autoFocus
+                                        value={input} 
+                                        onChange={(e) => setInput(e.target.value)} 
+                                        type="text" 
+                                        placeholder="Scan or type barcode..." 
+                                        className="w-full bg-slate-900/90 backdrop-blur border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-odoo-purple outline-none shadow-xl font-mono text-sm"
+                                    />
+                                </form>
+                            </div>
                         </div>
                     </div>
 
+                    {/* Results Panel */}
+                    <div className="w-full lg:w-96 flex flex-col gap-4 h-full overflow-hidden">
+                        {/* Last Scan */}
+                        <div className={`glass p-6 rounded-xl border-l-4 transition-all ${scans[0]?.status === 'error' ? 'border-red-500 bg-red-500/10' : scans[0]?.status === 'success' ? 'border-green-500 bg-green-500/10' : 'border-slate-500'}`}>
+                            {scans[0] ? (
+                                <div className="animate-fade-in-up">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${scans[0].status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                            {scans[0].status === 'success' ? 'Success' : 'Error'}
+                                        </span>
+                                        <span className="text-xs text-slate-400">{scans[0].time}</span>
+                                    </div>
+                                    <h2 className="text-base font-mono font-bold text-white break-all mb-3">{scans[0].raw}</h2>
+                                    {scans[0].type === 'GS1-128' && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="bg-slate-900/50 p-2 rounded border border-white/5">
+                                                <label className="text-xxs text-slate-500 uppercase">GTIN</label>
+                                                <div className="text-sm font-mono text-slate-200">{scans[0].parsed.gtin}</div>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-2 rounded border border-white/5">
+                                                <label className="text-xxs text-slate-500 uppercase">LOT</label>
+                                                <div className="text-sm font-mono text-slate-200">{scans[0].parsed.lot}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center text-slate-500 py-4">
+                                    <Scan size={32} className="mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">Ready to scan</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* History */}
+                        <div className="glass flex-1 rounded-xl flex flex-col overflow-hidden">
+                            <div className="p-3 bg-slate-800/50 border-b border-white/5 text-xs font-bold text-slate-400 uppercase tracking-wide">Session History</div>
+                            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                {scans.map(s => (
+                                    <div key={s.id} className="flex items-center p-2 rounded hover:bg-white/5 cursor-pointer group">
+                                        <div className={`w-1.5 h-1.5 rounded-full mr-3 ${s.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                        <span className="flex-1 text-sm font-mono text-slate-300 truncate">{s.raw}</span>
+                                        <span className="text-xs text-slate-600">{s.time}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. Heatmap
+        const Heatmap = () => {
+            const zones = useMemo(() => GENERATE_ZONES(), []);
+            return (
+                <div className="h-full flex flex-col animate-fade-in pb-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold text-white">Zone Utilization Map <span className="text-slate-500 font-normal ml-2 text-base">/ WH-Main</span></h2>
+                        <div className="flex gap-4 text-xs">
+                            <span className="flex items-center text-slate-400"><div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded mr-2"></div> &lt; 50%</span>
+                            <span className="flex items-center text-slate-400"><div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500 rounded mr-2"></div> 50-85%</span>
+                            <span className="flex items-center text-slate-400"><div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded mr-2"></div> &gt; 85%</span>
+                        </div>
+                    </div>
                     <div className="glass rounded-xl p-6 flex-1 overflow-y-auto">
                         <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                             {zones.map(z => {
-                                let styleClass = "bg-green-500/10 border-green-500/30 text-green-400 hover:shadow-[0_0_15px_rgba(34,197,94,0.3)]";
-                                if (z.utilization > 85) styleClass = "bg-red-500/10 border-red-500/30 text-red-400 animate-pulse hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]";
-                                else if (z.utilization > 50) styleClass = "bg-yellow-500/10 border-yellow-500/30 text-yellow-400 hover:shadow-[0_0_15px_rgba(234,179,8,0.3)]";
-
+                                let colors = z.utilization > 85 ? 'bg-red-500/10 border-red-500/40 text-red-400' : z.utilization > 50 ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400' : 'bg-green-500/10 border-green-500/40 text-green-400';
                                 return (
-                                    <div key={z.id} className={`aspect-square rounded-lg border flex flex-col justify-between p-3 relative group cursor-pointer transition-all ${styleClass}`}>
-                                        <span className="text-xs font-bold font-mono">{z.code}</span>
+                                    <div key={z.id} className={`aspect-square border rounded-lg p-2 flex flex-col justify-between cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${colors}`}>
+                                        <span className="text-xs font-mono font-bold">{z.code}</span>
                                         <div className="text-right">
-                                            <span className="text-lg font-bold block leading-none">{z.utilization}%</span>
-                                            <span className="text-xxs opacity-70">Utilized</span>
-                                        </div>
-                                        
-                                        {/* Hover Tooltip */}
-                                        <div className="absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center text-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg z-10 p-1 pointer-events-none">
-                                            <p className="text-white text-xs font-bold mb-1">{z.category}</p>
-                                            <p className="text-slate-400 text-xxs">{z.items} Items</p>
-                                            <div className="mt-2 text-odoo-purple text-xxs font-bold uppercase">Inspect</div>
+                                            <span className="text-lg font-bold">{z.utilization}%</span>
                                         </div>
                                     </div>
-                                );
+                                )
                             })}
                         </div>
                     </div>
@@ -528,12 +413,9 @@
             );
         };
 
-        // 8. Transfers Component
+        // 5. Transfer Wizard
         const TransferWizard = () => {
-            const [step, setStep] = useState(1);
-            const [sku, setSku] = useState('FURN_7888');
             const [qty, setQty] = useState(50);
-
             return (
                 <div className="h-full flex items-center justify-center p-4 animate-fade-in">
                     <div className="glass w-full max-w-3xl rounded-xl overflow-hidden border border-white/10 shadow-2xl">
@@ -541,75 +423,58 @@
                             <h2 className="text-xl font-bold text-white flex items-center">
                                 <Truck className="mr-3 text-odoo-purple" /> Smart Transfer Wizard
                             </h2>
-                            <div className="flex items-center space-x-2">
-                                <span className={`w-2 h-2 rounded-full transition-colors ${step >= 1 ? 'bg-odoo-purple' : 'bg-slate-700'}`}></span>
-                                <span className={`w-2 h-2 rounded-full transition-colors ${step >= 2 ? 'bg-odoo-purple' : 'bg-slate-700'}`}></span>
-                                <span className={`w-2 h-2 rounded-full transition-colors ${step >= 3 ? 'bg-odoo-purple' : 'bg-slate-700'}`}></span>
+                            <div className="flex gap-1">
+                                <span className="w-2 h-2 rounded-full bg-odoo-purple"></span>
+                                <span className="w-2 h-2 rounded-full bg-odoo-purple"></span>
+                                <span className="w-2 h-2 rounded-full bg-slate-700"></span>
                             </div>
                         </div>
-
                         <div className="p-8">
-                            {/* Route Visualization */}
+                            {/* Route */}
                             <div className="flex items-center justify-between mb-10 relative">
-                                <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-700 -z-10 transform -translate-y-1/2"></div>
-                                
-                                <div className="bg-slate-800 p-4 rounded-lg border border-slate-600 z-10 w-1/3 text-center shadow-lg">
-                                    <div className="text-xs text-slate-500 uppercase font-bold mb-1">Source</div>
-                                    <div className="text-white font-bold text-lg">WH-Main</div>
-                                    <div className="text-green-400 text-xs mt-1">450 Units Available</div>
+                                <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-700 -z-10"></div>
+                                <div className="bg-slate-800 p-4 rounded-lg border border-slate-600 z-10 w-1/3 text-center">
+                                    <div className="text-xs text-slate-500 font-bold mb-1">SOURCE</div>
+                                    <div className="text-white font-bold">WH-Main</div>
+                                    <div className="text-green-400 text-xs">450 Available</div>
                                 </div>
-
-                                <div className="bg-slate-900 z-10 p-2 rounded-full border border-slate-600 text-odoo-purple shadow-lg">
-                                    <ArrowRightLeft size={24} />
+                                <div className="bg-slate-900 p-2 rounded-full border border-slate-600 text-odoo-purple z-10">
+                                    <ArrowRightLeft />
                                 </div>
-
-                                <div className="bg-slate-800 p-4 rounded-lg border border-slate-600 z-10 w-1/3 text-center shadow-lg">
-                                    <div className="text-xs text-slate-500 uppercase font-bold mb-1">Destination</div>
-                                    <div className="text-white font-bold text-lg">WH-East</div>
-                                    <div className="text-yellow-400 text-xs mt-1">Low Stock Warning</div>
+                                <div className="bg-slate-800 p-4 rounded-lg border border-slate-600 z-10 w-1/3 text-center">
+                                    <div className="text-xs text-slate-500 font-bold mb-1">DESTINATION</div>
+                                    <div className="text-white font-bold">WH-East</div>
+                                    <div className="text-yellow-400 text-xs">Low Stock</div>
                                 </div>
                             </div>
 
-                            {/* Form Inputs */}
+                            {/* Controls */}
                             <div className="grid grid-cols-2 gap-6 mb-8">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-2">Product SKU</label>
-                                    <div className="flex items-center bg-slate-900/50 rounded-lg border border-slate-600 px-4 py-3 focus-within:border-odoo-purple transition-colors">
-                                        <Package className="text-slate-500 mr-3" size={18} />
-                                        <input 
-                                            type="text" 
-                                            value={sku}
-                                            onChange={(e) => setSku(e.target.value)}
-                                            className="bg-transparent border-none outline-none text-white w-full font-mono text-sm"
-                                        />
+                                    <label className="block text-sm text-slate-400 mb-2">SKU</label>
+                                    <div className="flex bg-slate-900/50 border border-slate-600 rounded-lg p-3">
+                                        <Package className="text-slate-500 mr-2" size={18} />
+                                        <input type="text" value="FURN_7888" readOnly className="bg-transparent text-white w-full outline-none font-mono" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-2">Quantity ({qty})</label>
-                                    <input 
-                                        type="range" 
-                                        min="1" 
-                                        max="450" 
-                                        value={qty} 
-                                        onChange={(e) => setQty(e.target.value)}
-                                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-odoo-purple mt-3"
-                                    />
+                                    <label className="block text-sm text-slate-400 mb-2">Quantity: {qty}</label>
+                                    <input type="range" min="1" max="450" value={qty} onChange={e => setQty(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-odoo-purple mt-3" />
                                 </div>
                             </div>
 
-                            {/* AI Suggestion */}
                             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-start mb-8">
                                 <Box className="text-blue-400 mt-1 mr-3 shrink-0" size={20} />
                                 <div>
-                                    <h4 className="text-sm font-bold text-blue-200">Smart Route Recommendation</h4>
-                                    <p className="text-xs text-blue-300/80 mt-1">Based on sales velocity in NY, transferring 50 units will cover demand for 14 days. Suggested carrier: FedEx Ground (Rate: $12.40).</p>
+                                    <h4 className="text-sm font-bold text-blue-200">Recommendation</h4>
+                                    <p className="text-xs text-blue-300/80 mt-1">Based on sales velocity in NY, transferring {qty} units covers demand for 14 days.</p>
                                 </div>
                             </div>
 
                             <div className="flex justify-end gap-3">
-                                <button className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors text-sm font-medium">Cancel</button>
-                                <button className="px-8 py-2.5 bg-odoo-purple text-white rounded-lg font-medium hover:bg-[#5a3b52] shadow-lg shadow-purple-900/30 flex items-center text-sm transition-all hover:scale-105 active:scale-95">
-                                    Validate Transfer <CheckCircle size={18} className="ml-2" />
+                                <button className="px-6 py-2 text-slate-400 hover:text-white transition-colors text-sm">Cancel</button>
+                                <button className="px-6 py-2 bg-odoo-purple text-white rounded-lg hover:bg-[#5a3b52] shadow-lg shadow-purple-900/30 flex items-center text-sm transition-transform active:scale-95">
+                                    Validate <CheckCircle size={16} className="ml-2" />
                                 </button>
                             </div>
                         </div>
@@ -618,59 +483,27 @@
             );
         };
 
-        // 9. Logs Component
+        // 6. Logs
         const LogsTable = () => {
-            const logs = useMemo(() => generateLogs(), []);
-
             return (
-                <div className="glass rounded-xl flex flex-col h-full overflow-hidden animate-fade-in">
+                <div className="glass rounded-xl flex flex-col h-full overflow-hidden animate-fade-in mb-6">
                     <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-900/30">
-                        <div>
-                            <h2 className="text-lg font-bold text-white">System Logs</h2>
-                            <p className="text-xs text-slate-500">adv_inv.barcode.log</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button className="flex items-center px-3 py-1.5 bg-slate-800 text-slate-300 rounded border border-slate-600 text-xs hover:bg-slate-700 transition">
-                                <Download size={14} className="mr-2" /> Export CSV
-                            </button>
-                        </div>
+                        <div><h2 className="text-lg font-bold text-white">System Logs</h2><p className="text-xs text-slate-500">adv_inv.barcode.log</p></div>
+                        <button className="flex items-center px-3 py-1.5 bg-slate-800 text-slate-300 rounded border border-slate-600 text-xs hover:bg-slate-700"><Download size={14} className="mr-2" /> Export</button>
                     </div>
                     <div className="overflow-auto flex-1">
                         <table className="w-full text-left text-sm text-slate-400">
-                            <thead className="bg-slate-900/80 text-slate-200 uppercase text-xs font-semibold sticky top-0 z-10 backdrop-blur-md">
-                                <tr>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4">Timestamp</th>
-                                    <th className="px-6 py-4">User</th>
-                                    <th className="px-6 py-4">Action</th>
-                                    <th className="px-6 py-4">Raw Data</th>
-                                    <th className="px-6 py-4">Location</th>
-                                </tr>
+                            <thead className="bg-slate-900/80 text-slate-200 uppercase text-xs font-semibold sticky top-0 backdrop-blur">
+                                <tr><th className="px-6 py-4">Status</th><th className="px-6 py-4">Time</th><th className="px-6 py-4">User</th><th className="px-6 py-4">Action</th><th className="px-6 py-4">Data</th></tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {logs.map((log) => (
-                                    <tr key={log.id} className="hover:bg-white/5 transition-colors">
-                                        <td className="px-6 py-3">
-                                            {log.status === 'success' && <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold bg-green-500/10 text-green-400 uppercase tracking-wide">Success</span>}
-                                            {log.status === 'warning' && <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold bg-yellow-500/10 text-yellow-400 uppercase tracking-wide">Pending</span>}
-                                            {log.status === 'error' && <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold bg-red-500/10 text-red-400 uppercase tracking-wide">Error</span>}
-                                        </td>
+                                {MOCK_LOGS.map(log => (
+                                    <tr key={log.id} className="hover:bg-white/5">
+                                        <td className="px-6 py-3"><span className={`px-2 py-0.5 rounded text-xxs font-bold uppercase ${log.status === 'success' ? 'bg-green-500/10 text-green-400' : log.status === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-yellow-500/10 text-yellow-400'}`}>{log.status}</span></td>
                                         <td className="px-6 py-3 font-mono text-xs">{log.time}</td>
                                         <td className="px-6 py-3 text-white">{log.user}</td>
                                         <td className="px-6 py-3">{log.action}</td>
                                         <td className="px-6 py-3 font-mono text-xs text-slate-500">{log.sku}</td>
-                                        <td className="px-6 py-3 text-slate-300">{log.loc}</td>
-                                    </tr>
-                                ))}
-                                {/* Fillers for visual density */}
-                                {[...Array(8)].map((_, i) => (
-                                    <tr key={i} className="hover:bg-white/5 transition-colors">
-                                        <td className="px-6 py-3"><span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold bg-green-500/10 text-green-400 uppercase tracking-wide">Success</span></td>
-                                        <td className="px-6 py-3 font-mono text-xs">08:{40-i} AM</td>
-                                        <td className="px-6 py-3 text-white">Bot Worker</td>
-                                        <td className="px-6 py-3">SYNC_STOCK</td>
-                                        <td className="px-6 py-3 font-mono text-xs text-slate-500">INTERNAL_JOB_{i}</td>
-                                        <td className="px-6 py-3 text-slate-300">System</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -680,14 +513,12 @@
             );
         };
 
-        // --- MAIN APPLICATION ---
-
+        // --- MAIN APP ---
         const App = () => {
             const [activeView, setActiveView] = useState('dashboard');
-
             const renderContent = () => {
                 switch(activeView) {
-                    case 'dashboard': return <Dashboard />;
+                    case 'dashboard': return <Dashboard setView={setActiveView} />;
                     case 'scanner': return <Scanner />;
                     case 'heatmap': return <Heatmap />;
                     case 'transfers': return <TransferWizard />;
@@ -697,17 +528,28 @@
             };
 
             return (
-                <div className="flex h-screen w-screen bg-[#020617] overflow-hidden text-slate-200 font-sans">
+                <div className="flex h-screen w-screen bg-[#020617] text-slate-200 font-sans overflow-hidden selection:bg-purple-500/30">
                     <Sidebar activeView={activeView} setView={setActiveView} />
-                    
                     <div className="flex-1 flex flex-col relative overflow-hidden">
-                        {/* Background Gradients */}
+                        {/* Background Ambiance */}
                         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-odoo-purple/20 rounded-full blur-[120px] pointer-events-none"></div>
                         <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
-
-                        <Topbar />
                         
-                        <main className="flex-1 p-6 overflow-hidden flex flex-col relative z-10">
+                        {/* Top Navigation */}
+                        <header className="h-16 glass sticky top-0 z-40 px-6 flex items-center justify-between shrink-0">
+                            <div className="flex items-center text-slate-400 bg-slate-900/50 px-3 py-1.5 rounded-md border border-slate-700/50 w-96 focus-within:border-odoo-purple transition-colors">
+                                <Search size={16} className="mr-3" />
+                                <input type="text" placeholder="Search..." className="bg-transparent border-none focus:ring-0 text-sm w-full text-white placeholder-slate-500 outline-none" />
+                            </div>
+                            <div className="flex items-center space-x-4">
+                                <div className="flex items-center text-green-400 text-xs font-medium px-2.5 py-1 bg-green-500/10 border border-green-500/20 rounded-full"><Wifi size={12} className="mr-1.5" /> Online</div>
+                                <div className="h-6 w-px bg-slate-700 mx-2"></div>
+                                <button className="relative hover:text-white transition-colors"><Bell size={20} /><span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span></button>
+                            </div>
+                        </header>
+
+                        {/* Main Content Area */}
+                        <main className="flex-1 p-6 overflow-hidden relative z-10">
                             {renderContent()}
                         </main>
                     </div>
