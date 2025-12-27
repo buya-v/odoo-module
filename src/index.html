@@ -1,1 +1,356 @@
-<h1>Critical Build System Failure</h1><pre>exception TypeError: fetch failed sending request</pre>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>demo-odoo-module</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide-react@latest"></script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; font-family: sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { Home, Package, Settings, User, Activity, Barcode, ArrowRight, ArrowLeft, File, AlertTriangle, CheckCircle, Truck, Map, Layers } = LucideReact;
+
+        const Sidebar = () => {
+            return (
+                <div className="fixed top-0 left-0 h-full w-64 bg-gray-900 glass shadow-md">
+                    <div className="p-4">
+                        <h1 className="text-2xl font-semibold text-white">Odoo Inventory</h1>
+                    </div>
+                    <nav>
+                        <ul className="p-4 space-y-2">
+                            <li>
+                                <a href="#" className="flex items-center space-x-2 text-gray-300 hover:text-white hover:bg-gray-700 p-2 rounded">
+                                    <Home className="h-5 w-5" />
+                                    <span>Dashboard</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" className="flex items-center space-x-2 text-gray-300 hover:text-white hover:bg-gray-700 p-2 rounded">
+                                    <Package className="h-5 w-5" />
+                                    <span>Inventory</span>
+                                </a>
+                            </li>
+                             <li>
+                                <a href="#" className="flex items-center space-x-2 text-gray-300 hover:text-white hover:bg-gray-700 p-2 rounded">
+                                    <Barcode className="h-5 w-5" />
+                                    <span>Scan Items</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" className="flex items-center space-x-2 text-gray-300 hover:text-white hover:bg-gray-700 p-2 rounded">
+                                    <Activity className="h-5 w-5" />
+                                    <span>Activity Log</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" className="flex items-center space-x-2 text-gray-300 hover:text-white hover:bg-gray-700 p-2 rounded">
+                                    <Settings className="h-5 w-5" />
+                                    <span>Settings</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" className="flex items-center space-x-2 text-gray-300 hover:text-white hover:bg-gray-700 p-2 rounded">
+                                    <User className="h-5 w-5" />
+                                    <span>Profile</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            );
+        };
+
+        const Navbar = () => {
+            return (
+                <div className="bg-gray-800 h-16 flex items-center justify-between px-6 shadow-md glass">
+                    <div className="flex items-center space-x-4">
+                        <button className="text-gray-400 hover:text-white focus:outline-none">
+                            <ArrowRight className="h-6 w-6" />
+                        </button>
+                        <h2 className="text-white font-semibold text-xl">Dashboard</h2>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                        <span className="text-gray-300">Welcome, Admin</span>
+                        <img src="https://via.placeholder.com/40" alt="User Avatar" className="rounded-full h-10 w-10 object-cover" />
+                    </div>
+                </div>
+            );
+        };
+
+        const StatCard = ({ title, value, icon, color }) => {
+            return (
+                <div className={`bg-gray-800 p-4 rounded-md shadow-md glass border-l-4 border-${color}-500`}>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-semibold">{title}</h3>
+                            <p className="text-2xl">{value}</p>
+                        </div>
+                        <div className="text-gray-500">
+                            {icon}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const InventoryList = ({ items }) => {
+            return (
+                <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+                    <h3 className="text-lg font-semibold mb-2">Inventory Items</h3>
+                    <ul>
+                        {items.map((item, index) => (
+                            <li key={index} className="py-2 border-b border-gray-700 last:border-b-0">
+                                <div className="flex justify-between items-center">
+                                    <span>{item.name}</span>
+                                    <span className="text-gray-400">Quantity: {item.quantity}</span>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            );
+        };
+
+        const TransferRequest = ({request}) => {
+            return (
+                <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+                    <h3 className="text-lg font-semibold mb-2">Transfer Request</h3>
+                    <ul>
+                        <li className="py-2 border-b border-gray-700 last:border-b-0">
+                            <div className="flex justify-between items-center">
+                                <span>Request ID: {request.id}</span>
+                                <span className="text-gray-400">Status: {request.status}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span>From: {request.from}</span>
+                                <span className="text-gray-400">To: {request.to}</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            );
+        };
+
+        const BarcodeScannerInterface = () => {
+            const [barcode, setBarcode] = useState("");
+            const [scanResult, setScanResult] = useState("");
+            const [scanStatus, setScanStatus] = useState("idle"); // idle, scanning, success, error
+
+            const handleScan = (e) => {
+                e.preventDefault();
+                setScanStatus("scanning");
+                setTimeout(() => {
+                    if (barcode === "12345") {
+                        setScanResult(`Successfully scanned barcode: ${barcode}`);
+                        setScanStatus("success");
+                    } else {
+                        setScanResult(`Error: Invalid barcode: ${barcode}`);
+                        setScanStatus("error");
+                    }
+                }, 1500); // Simulate scanning delay
+            };
+
+            return (
+                <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+                    <h3 className="text-lg font-semibold mb-2">Barcode Scanner</h3>
+                    <form onSubmit={handleScan} className="space-y-2">
+                        <div>
+                            <label htmlFor="barcode" className="block text-sm font-medium text-gray-300">Enter Barcode:</label>
+                            <input
+                                type="text"
+                                id="barcode"
+                                className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                value={barcode}
+                                onChange={(e) => setBarcode(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            className={`bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${scanStatus === "scanning" ? "opacity-50 cursor-not-allowed" : ""}`}
+                            disabled={scanStatus === "scanning"}
+                        >
+                            {scanStatus === "scanning" ? "Scanning..." : "Scan"}
+                        </button>
+                    </form>
+                    {scanResult && (
+                        <div className={`mt-4 p-2 rounded-md ${scanStatus === "success" ? "bg-green-700" : "bg-red-700"}`}>
+                            {scanStatus === "success" ? <CheckCircle className="inline-block mr-2" /> : <AlertTriangle className="inline-block mr-2" />}
+                            {scanResult}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const WarehouseHeatmap = () => {
+          // Placeholder for heatmap logic
+          return(
+            <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+              <h3 className="text-lg font-semibold mb-2">Warehouse Heatmap</h3>
+              <p className="text-gray-300">Visualization of warehouse stock density.</p>
+              <div className="h-40 bg-gray-700 rounded-md flex items-center justify-center text-gray-400">
+                {/* Placeholder for heatmap visualization */}
+                <span>Heatmap Visualization Here</span>
+              </div>
+            </div>
+          );
+        }
+
+        const SmartTransferWizard = () => {
+          const [fromWarehouse, setFromWarehouse] = useState("");
+          const [toWarehouse, setToWarehouse] = useState("");
+          const [item, setItem] = useState("");
+          const [quantity, setQuantity] = useState(1);
+
+          const handleTransfer = () => {
+            // Placeholder for transfer logic
+            alert(`Transferring ${quantity} of ${item} from ${fromWarehouse} to ${toWarehouse}`);
+          };
+
+          return(
+             <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+              <h3 className="text-lg font-semibold mb-2">Smart Transfer Wizard</h3>
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">From Warehouse:</label>
+                  <input type="text" className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500" value={fromWarehouse} onChange={(e) => setFromWarehouse(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">To Warehouse:</label>
+                  <input type="text" className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500" value={toWarehouse} onChange={(e) => setToWarehouse(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Item:</label>
+                  <input type="text" className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500" value={item} onChange={(e) => setItem(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Quantity:</label>
+                  <input type="number" className="mt-1 p-2 w-full rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value))} />
+                </div>
+                <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" onClick={handleTransfer}>Transfer</button>
+              </div>
+            </div>
+          );
+        }
+
+        const ActivityLog = () => {
+          const activities = [
+            { id: 1, user: "John Doe", action: "Scanned Item", timestamp: "2024-01-01 10:00:00" },
+            { id: 2, user: "Jane Smith", action: "Transfered Item", timestamp: "2024-01-01 10:05:00" },
+            { id: 3, user: "Peter Jones", action: "Adjusted Inventory", timestamp: "2024-01-01 10:10:00" },
+          ];
+
+          return (
+            <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+              <h3 className="text-lg font-semibold mb-2">Activity Log</h3>
+              <ul>
+                {activities.map((activity) => (
+                  <li key={activity.id} className="py-2 border-b border-gray-700 last:border-b-0">
+                    <div className="flex justify-between items-center">
+                      <span>{activity.user} - {activity.action}</span>
+                      <span className="text-gray-400">{activity.timestamp}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        };
+
+        const SettingsPanel = () => {
+          return (
+            <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+              <h3 className="text-lg font-semibold mb-2">Settings</h3>
+              <p className="text-gray-300">Configure your inventory settings.</p>
+              {/* Add settings form elements here */}
+              <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4">Save Settings</button>
+            </div>
+          );
+        };
+
+        const ProfilePanel = () => {
+          return (
+            <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
+              <h3 className="text-lg font-semibold mb-2">Profile</h3>
+              <p className="text-gray-300">View and edit your profile information.</p>
+              {/* Add profile information elements here */}
+            </div>
+          );
+        };
+
+        const Dashboard = () => {
+            const stats = [
+                { title: "Total Products", value: "1,250", icon: <Package className="h-8 w-8" />, color: "blue" },
+                { title: "Active Orders", value: "75", icon: <File className="h-8 w-8" />, color: "green" },
+                { title: "Warehouse Zones", value: "15", icon: <Layers className="h-8 w-8" />, color: "purple" },
+                { title: "Users Online", value: "5", icon: <User className="h-8 w-8" />, color: "yellow" },
+            ];
+
+            const inventoryItems = [
+                { name: "Product A", quantity: 120 },
+                { name: "Product B", quantity: 85 },
+                { name: "Product C", quantity: 200 },
+                { name: "Product D", quantity: 50 },
+            ];
+
+            const transferRequest = {
+              id: "TR001",
+              from: "Warehouse A",
+              to: "Warehouse B",
+              status: "Pending",
+            };
+
+            return (
+                <div className="ml-64 p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        {stats.map((stat, index) => (
+                            <StatCard key={index} title={stat.title} value={stat.value} icon={stat.icon} color={stat.color} />
+                        ))}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InventoryList items={inventoryItems} />
+                        <TransferRequest request={transferRequest}/>
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <BarcodeScannerInterface />
+                      <WarehouseHeatmap />
+                    </div>
+                    <div className="mt-4">
+                      <SmartTransferWizard />
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <ActivityLog />
+                      <SettingsPanel />
+                    </div>
+                    <div className="mt-4">
+                      <ProfilePanel />
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            return (
+                <div className="h-screen w-screen overflow-hidden">
+                    <Navbar />
+                    <Sidebar />
+                    <Dashboard />
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
