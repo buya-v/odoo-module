@@ -104,7 +104,7 @@
             );
         };
 
-        const InventoryList = ({ items }) => {
+        const InventoryList = ({ items, onEdit, onDelete, onAdd }) => {
             return (
                 <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
                     <h3 className="text-lg font-semibold mb-2">Inventory Items</h3>
@@ -123,22 +123,22 @@
                               <td className="px-6 py-4 whitespace-nowrap">{item.name}</td>
                               <td className="px-6 py-4 whitespace-nowrap">{item.quantity}</td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <button className="text-blue-500 hover:text-blue-700 mr-2"><Edit className="h-4 w-4" /></button>
-                                <button className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></button>
+                                <button className="text-blue-500 hover:text-blue-700 mr-2" onClick={() => onEdit(item.id)}><Edit className="h-4 w-4" /></button>
+                                <button className="text-red-500 hover:text-red-700" onClick={() => onDelete(item.id)}><Trash2 className="h-4 w-4" /></button>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                    <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4 flex items-center">
+                    <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4 flex items-center" onClick={onAdd}>
                         <Plus className="h-4 w-4 mr-2" /> Add Item
                     </button>
                   </div>
             );
         };
 
-        const TransferRequest = ({request}) => {
+        const TransferRequest = ({request, onApprove, onReject}) => {
             return (
                 <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
                     <h3 className="text-lg font-semibold mb-2">Transfer Request</h3>
@@ -153,8 +153,8 @@
                                 <span className="text-gray-400">To: {request.to}</span>
                             </div>
                             <div className="mt-2">
-                                <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline mr-2">Approve</button>
-                                <button className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline">Reject</button>
+                                <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline mr-2" onClick={onApprove}>Approve</button>
+                                <button className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline" onClick={onReject}>Reject</button>
                             </div>
                         </li>
                     </ul>
@@ -173,8 +173,10 @@
                 setTimeout(() => {
                     if (barcode === "12345") {
                         setScanResult(`Successfully scanned barcode: ${barcode}`);
+                        setScanStatus("success");
                     } else {
                         setScanResult(`Error: Invalid barcode: ${barcode}`);
+                        setScanStatus("error");
                     }
                 }, 1500); // Simulate scanning delay
             };
@@ -217,13 +219,30 @@
 
         const WarehouseHeatmap = () => {
           // Placeholder for heatmap logic
+          const [warehouseData, setWarehouseData] = useState([
+              { zone: "A1", utilization: 60 },
+              { zone: "A2", utilization: 90 },
+              { zone: "B1", utilization: 30 },
+              { zone: "B2", utilization: 75 }
+          ]);
+
           return(
             <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
               <h3 className="text-lg font-semibold mb-2">Warehouse Heatmap</h3>
               <p className="text-gray-300">Visualization of warehouse stock density.</p>
-              <div className="h-40 bg-gradient-to-r from-green-500 to-red-500 rounded-md flex items-center justify-center text-gray-100">
-                {/* Placeholder for heatmap visualization */}
-                <span>Simulated Heatmap</span>
+              <div className="flex flex-col space-y-2">
+                  {warehouseData.map((data) => (
+                      <div key={data.zone} className="flex items-center justify-between">
+                          <span>Zone {data.zone}</span>
+                          <div className="w-2/3 bg-gray-700 rounded-full h-4">
+                              <div
+                                  className="bg-gradient-to-r from-green-500 to-red-500 h-4 rounded-full"
+                                  style={{ width: `${data.utilization}%` }}
+                              ></div>
+                          </div>
+                          <span>{data.utilization}%</span>
+                      </div>
+                  ))}
               </div>
             </div>
           );
@@ -321,6 +340,7 @@
           const [notificationEnabled, setNotificationEnabled] = useState(true);
           const [theme, setTheme] = useState("dark");
           const [voiceFeedbackEnabled, setVoiceFeedbackEnabled] = useState(false);
+          const [offlineModeEnabled, setOfflineModeEnabled] = useState(false);
 
           const handleNotificationToggle = () => {
             setNotificationEnabled(!notificationEnabled);
@@ -333,6 +353,10 @@
           const handleVoiceFeedbackToggle = () => {
             setVoiceFeedbackEnabled(!voiceFeedbackEnabled);
           };
+
+          const handleOfflineModeToggle = () => {
+              setOfflineModeEnabled(!offlineModeEnabled);
+          }
 
           return (
             <div className="bg-gray-800 p-4 rounded-md shadow-md glass">
@@ -365,6 +389,15 @@
                         onClick={handleVoiceFeedbackToggle}
                     >
                         {voiceFeedbackEnabled ? "Enabled" : "Disabled"}
+                    </button>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-300">Offline Mode:</label>
+                    <button
+                        className={`px-4 py-2 rounded-md font-bold ${offlineModeEnabled ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white"}`}
+                        onClick={handleOfflineModeToggle}
+                    >
+                        {offlineModeEnabled ? "Enabled" : "Disabled"}
                     </button>
                 </div>
                 <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4">Save Settings</button>
@@ -515,7 +548,7 @@
         };
 
         const Dashboard = () => {
-            const stats = [
+            const [stats, setStats] = useState([
                 { title: "Total Products", value: "1,250", icon: <Package className="h-8 w-8" />, color: "blue" },
                 { title: "Active Orders", value: "75", icon: <ShoppingCart className="h-8 w-8" />, color: "green" },
                 { title: "Warehouse Zones", value: "15", icon: <Layers className="h-8 w-8" />, color: "purple" },
@@ -524,20 +557,44 @@
                 { title: "Transfer Requests", value: "12", icon: <Truck className="h-8 w-8" />, color: "indigo" },
                 { title: "Avg. Order Value", value: "$125.50", icon: <TrendingUp className="h-8 w-8" />, color: "teal" },
                 { title: "Support Tickets", value: "7", icon: <MessageSquare className="h-8 w-8" />, color: "orange" },
-            ];
+            ]);
 
-            const inventoryItems = [
-                { name: "Product A", quantity: 120 },
-                { name: "Product B", quantity: 85 },
-                { name: "Product C", quantity: 200 },
-                { name: "Product D", quantity: 50 },
-            ];
+            const [inventoryItems, setInventoryItems] = useState([
+                { id: 1, name: "Product A", quantity: 120 },
+                { id: 2, name: "Product B", quantity: 85 },
+                { id: 3, name: "Product C", quantity: 200 },
+                { id: 4, name: "Product D", quantity: 50 },
+            ]);
 
-            const transferRequest = {
+            const [transferRequest, setTransferRequest] = useState({
               id: "TR001",
               from: "Warehouse A",
               to: "Warehouse B",
               status: "Pending",
+            });
+
+            const handleApproveRequest = () => {
+              setTransferRequest({...transferRequest, status: "Approved"});
+            };
+
+            const handleRejectRequest = () => {
+              setTransferRequest({...transferRequest, status: "Rejected"});
+            };
+
+            const handleEditItem = (id) => {
+                alert(`Edit item with id: ${id}`);
+            };
+
+            const handleDeleteItem = (id) => {
+                setInventoryItems(inventoryItems.filter(item => item.id !== id));
+            };
+
+            const handleAddItem = () => {
+                const newItemName = prompt("Enter new item name:");
+                if (newItemName) {
+                    const nextId = inventoryItems.length > 0 ? Math.max(...inventoryItems.map(item => item.id)) + 1 : 1;
+                    setInventoryItems([...inventoryItems, { id: nextId, name: newItemName, quantity: 0 }]);
+                }
             };
 
             return (
@@ -548,8 +605,8 @@
                         ))}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InventoryList items={inventoryItems} />
-                        <TransferRequest request={transferRequest}/>
+                        <InventoryList items={inventoryItems} onEdit={handleEditItem} onDelete={handleDeleteItem} onAdd={handleAddItem}/>
+                        <TransferRequest request={transferRequest} onApprove={handleApproveRequest} onReject={handleRejectRequest}/>
                     </div>
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                       <BarcodeScannerInterface />
@@ -562,28 +619,4 @@
                       <ActivityLog />
                       <SettingsPanel />
                     </div>
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <ProfilePanel />
-                      <StockLevelChart />
-                    </div>
-                    <div className="mt-4">
-                        <RecentOrders />
-                    </div>
-                </div>
-            );
-        };
-
-        const App = () => {
-            return (
-                <div className="h-screen w-screen overflow-hidden">
-                    <Navbar />
-                    <Sidebar />
-                    <Dashboard />
-                </div>
-            );
-        };
-
-        ReactDOM.render(<App />, document.getElementById('root'));
-    </script>
-</body>
-</html>
+                    <div className="mt-4
