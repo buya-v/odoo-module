@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Odoo 18 Advanced Inventory Tracker</title>
+    <title>demo-odoo-module | Advanced Inventory Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -11,60 +11,64 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/lucide-react@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
         
+        :root {
+            --odoo-purple: #714B67;
+            --odoo-success: #28A745;
+            --odoo-warning: #FFC107;
+            --surface: #020617;
+        }
+
         body { 
-            background-color: #0f172a; 
+            background-color: var(--surface); 
             color: #f8fafc; 
-            font-family: 'Inter', sans-serif; 
-            overflow: hidden; 
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
         }
-        
-        /* Glassmorphism Utilities */
+
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
         .glass { 
-            background: rgba(30, 41, 59, 0.4); 
+            background: rgba(15, 23, 42, 0.6); 
             backdrop-filter: blur(12px); 
-            border: 1px solid rgba(255,255,255,0.08); 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        
-        .glass-solid { 
-            background: #1e293b; 
-            border-right: 1px solid rgba(255,255,255,0.08); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
         }
 
-        /* Odoo Branding & Status Colors */
-        .text-odoo { color: #714B67; }
-        .bg-odoo { background-color: #714B67; }
-        .border-odoo { border-color: #714B67; }
-        
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .bg-odoo { background-color: var(--odoo-purple); }
+        .text-odoo { color: var(--odoo-purple); }
+        .border-odoo { border-color: var(--odoo-purple); }
 
-        /* Scanner Animation */
-        @keyframes scan-move {
-            0% { top: 0%; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
+        /* Scanning Animation */
+        @keyframes scan {
+            0% { transform: translateY(0); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(240px); opacity: 0; }
         }
-        .scan-line {
-            position: absolute;
+        .scanner-line {
             width: 100%;
             height: 2px;
-            background: #28A745;
-            box-shadow: 0 0 10px #28A745;
-            animation: scan-move 2.5s infinite linear;
+            background: var(--odoo-success);
+            box-shadow: 0 0 15px var(--odoo-success);
+            position: absolute;
+            animation: scan 2s infinite linear;
+            z-index: 10;
         }
 
-        /* Animations */
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-        
-        .text-xxs { font-size: 0.65rem; }
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .sidebar-item-active {
+            background: linear-gradient(90deg, rgba(113, 75, 103, 0.2) 0%, rgba(113, 75, 103, 0) 100%);
+            border-left: 3px solid var(--odoo-purple);
+        }
+
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -77,497 +81,348 @@
             CheckCircle, Search, Wifi, WifiOff, Camera, X, RefreshCw,
             ArrowRightLeft, Database, MoreVertical, Filter, Download,
             QrCode, PlayCircle, Plus, ChevronDown, BarChart3, Layers,
-            Maximize2, ShieldCheck, Activity
+            Maximize2, ShieldCheck, Activity, LogOut, Menu, Globe
         } = lucideReact;
 
-        // --- MOCK DATA ---
-        const WAREHOUSES = [
-            { id: 1, name: "WH-Main (SF)", code: "WH", type: "Distribution", fill: 78, capacity: 15000, onHand: 11700 },
-            { id: 2, name: "WH-Transit", code: "TRN", type: "Transit", fill: 12, capacity: 5000, onHand: 600 },
-            { id: 3, name: "WH-Quality (QC)", code: "QC", type: "Quality Control", fill: 45, capacity: 2000, onHand: 900 },
-            { id: 4, name: "WH-East (NY)", code: "NY", type: "Fulfillment", fill: 92, capacity: 10000, onHand: 9200 },
-        ];
-
-        const GENERATE_ZONES = () => Array.from({ length: 48 }, (_, i) => ({
-            id: `Z-${i+1}`,
-            code: `A${Math.floor(i/12) + 1}-R${(i%12) + 1}`,
+        // --- MOCK CONSTANTS ---
+        const ZONES = Array.from({ length: 32 }, (_, i) => ({
+            id: i,
+            label: `${String.fromCharCode(65 + Math.floor(i/8))}${i%8 + 1}`,
             utilization: Math.floor(Math.random() * 100),
-            items: Math.floor(Math.random() * 500),
-            category: i < 12 ? 'Cold Storage' : 'Ambient'
+            items: Math.floor(Math.random() * 1200),
+            temp: (Math.random() * 5 + 18).toFixed(1)
         }));
 
-        const MOCK_LOGS = [
-            { id: 101, user: "Mitchel Admin", action: "SCAN_IN", sku: "(01)93847(10)L99", loc: "WH/Stock/A1", time: "10:42 AM", status: "success" },
-            { id: 102, user: "Marc Demo", action: "TRANSFER", sku: "FURN_7777", loc: "WH -> QC", time: "10:30 AM", status: "warning" },
-            { id: 103, user: "Joel Willis", action: "SCAN_OUT", sku: "(01)11223(17)2412", loc: "WH/Output", time: "09:15 AM", status: "success" },
-            { id: 104, user: "Mitchel Admin", action: "ERROR", sku: "INVALID_BARCODE", loc: "N/A", time: "09:00 AM", status: "error" },
-            { id: 105, user: "System", action: "AUTO_REORDER", sku: "BOLT-002", loc: "WH/Stock/C4", time: "08:55 AM", status: "success" },
+        const INITIAL_LOGS = [
+            { id: 'LOG-881', user: 'Mitchell Admin', action: 'GS1_SCAN', target: 'SKU-0012', status: 'success', time: '10:42:01', loc: 'WH/Zone-A1' },
+            { id: 'LOG-880', user: 'Marc Demo', action: 'IWT_TRANSFER', target: 'TRF-992', status: 'warning', time: '10:35:15', loc: 'WH -> QC' },
+            { id: 'LOG-879', user: 'Mitchell Admin', action: 'STOCK_ADJUST', target: 'SKU-5521', status: 'success', time: '09:20:44', loc: 'WH/Zone-B4' },
+            { id: 'LOG-878', user: 'Joel Willis', action: 'SCAN_ERROR', target: 'INVALID_DATA', status: 'error', time: '08:15:22', loc: 'WH/Loading-Dock' }
+        ];
+
+        const WAREHOUSES = [
+            { id: 1, name: 'Main Fulfillment (SF)', code: 'WH-SF', stock: 84200, cap: 100000, type: 'Internal' },
+            { id: 2, name: 'East Coast Transit', code: 'WH-TRN', stock: 12400, cap: 25000, type: 'Transit' },
+            { id: 3, name: 'Quality Control Hub', code: 'WH-QC', stock: 2100, cap: 5000, type: 'QC' }
         ];
 
         // --- COMPONENTS ---
 
-        // 1. Sidebar Component
-        const Sidebar = ({ activeView, setView }) => {
+        const Sidebar = ({ currentView, setView }) => {
             const menuItems = [
-                { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                { id: 'scanner', label: 'Barcode Operations', icon: Scan },
+                { id: 'dashboard', label: 'Command Center', icon: LayoutDashboard },
+                { id: 'scanner', label: 'Quick Scan UI', icon: Scan },
                 { id: 'heatmap', label: 'Warehouse Map', icon: Map },
                 { id: 'transfers', label: 'Smart Transfers', icon: Truck },
-                { id: 'logs', label: 'Audit Logs', icon: History },
+                { id: 'logs', label: 'Audit Trail', icon: History },
+                { id: 'settings', label: 'System Config', icon: Settings },
             ];
 
             return (
-                <div className="w-72 h-full glass-solid flex flex-col z-50 transition-all shadow-xl hidden md:flex">
-                    <div className="h-20 flex items-center px-6 border-b border-white/5">
-                        <div className="w-10 h-10 bg-odoo rounded-xl flex items-center justify-center mr-3 shadow-lg shadow-purple-900/50">
-                            <Layers className="text-white" size={24} />
+                <div className="w-64 h-screen glass border-r border-white/5 flex flex-col z-50">
+                    <div className="p-6 flex items-center gap-3">
+                        <div className="w-10 h-10 bg-odoo rounded-xl flex items-center justify-center shadow-lg shadow-purple-900/40">
+                            <Layers className="text-white" size={22} />
                         </div>
                         <div>
-                            <h1 className="font-bold text-lg tracking-tight text-white leading-tight">Odoo Inventory</h1>
-                            <p className="text-xs text-slate-500 font-medium">Enterprise v18.0</p>
+                            <h1 className="font-bold text-sm tracking-tight text-white leading-none">ODOO 18</h1>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Adv. Inventory</p>
                         </div>
                     </div>
 
-                    <div className="flex-1 py-8 px-4 space-y-1 overflow-y-auto">
-                        <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Operations</p>
-                        {menuItems.map((item) => (
+                    <nav className="flex-1 px-3 mt-4 space-y-1">
+                        {menuItems.map(item => (
                             <button
                                 key={item.id}
                                 onClick={() => setView(item.id)}
-                                className={`w-full flex items-center px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
-                                    activeView === item.id 
-                                    ? 'bg-odoo text-white shadow-lg shadow-purple-900/40' 
-                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all group ${
+                                    currentView === item.id 
+                                    ? 'sidebar-item-active text-white' 
+                                    : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
                                 }`}
                             >
-                                <item.icon size={20} className={`mr-3 transition-transform group-hover:scale-110 ${activeView === item.id ? 'text-white' : 'text-slate-500 group-hover:text-white'}`} />
+                                <item.icon size={18} className={currentView === item.id ? 'text-odoo' : 'group-hover:text-slate-200'} />
                                 {item.label}
-                                {item.id === 'scanner' && <span className="ml-auto w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>}
+                                {item.id === 'scanner' && <div className="ml-auto w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />}
                             </button>
                         ))}
+                    </nav>
+
+                    <div className="p-4 border-t border-white/5 bg-black/20">
+                        <div className="flex items-center gap-3 p-2">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-[10px] font-bold text-white">MA</div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-white truncate">Mitchell Admin</p>
+                                <p className="text-[10px] text-slate-500 truncate">Inventory Director</p>
+                            </div>
+                            <LogOut size={14} className="text-slate-500 cursor-pointer hover:text-red-400 transition-colors" />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TopBar = () => (
+            <header className="h-16 border-b border-white/5 glass px-8 flex items-center justify-between sticky top-0 z-40">
+                <div className="flex items-center gap-6 flex-1">
+                    <div className="relative w-96">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Search SKU, Serial, or Location (Alt + K)" 
+                            className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-odoo/50 transition-all"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        <span className="text-[10px] font-bold text-green-500">SYSTEM ONLINE</span>
+                    </div>
+                    <button className="relative p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-all">
+                        <Bell size={18} />
+                        <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-[#020617]" />
+                    </button>
+                    <div className="w-px h-6 bg-white/10 mx-2" />
+                    <button className="flex items-center gap-2 text-slate-400 hover:text-white transition-all">
+                        <Globe size={18} />
+                        <span className="text-xs font-medium">EN-US</span>
+                    </button>
+                </div>
+            </header>
+        );
+
+        const Dashboard = () => (
+            <div className="p-8 space-y-8 fade-in overflow-y-auto h-full pb-20">
+                <div className="flex justify-between items-end">
+                    <div>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">Enterprise Overview</h2>
+                        <p className="text-slate-400 text-sm mt-1">Real-time inventory metrics across 3 global nodes.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-semibold hover:bg-white/10 transition-all">Download Report</button>
+                        <button className="px-4 py-2 bg-odoo text-white rounded-lg text-xs font-semibold shadow-lg shadow-purple-900/20 hover:bg-[#5a3b52] transition-all">Add Transaction</button>
+                    </div>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[
+                        { label: 'Physical On-Hand', val: '98,740', icon: Package, trend: '+2.4%', color: 'text-blue-400', bg: 'bg-blue-400/10' },
+                        { label: 'ATP (Available to Promise)', val: '92,110', icon: ShieldCheck, trend: '+1.1%', color: 'text-green-400', bg: 'bg-green-400/10' },
+                        { label: 'Incoming Transfers', val: '14', icon: Truck, trend: '-3', color: 'text-orange-400', bg: 'bg-orange-400/10' },
+                        { label: 'QC Pending Items', val: '2,105', icon: AlertTriangle, trend: '+12%', color: 'text-red-400', bg: 'bg-red-400/10' },
+                    ].map((stat, i) => (
+                        <div key={i} className="glass rounded-2xl p-6 border border-white/5 hover:border-white/20 transition-all group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className={`${stat.bg} ${stat.color} p-3 rounded-xl`}>
+                                    <stat.icon size={20} />
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded ${stat.trend.includes('+') ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                                    {stat.trend}
+                                </span>
+                            </div>
+                            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">{stat.label}</h3>
+                            <p className="text-2xl font-bold text-white mt-1">{stat.val}</p>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Warehouse Capacity Card */}
+                    <div className="lg:col-span-2 glass rounded-2xl p-6 border border-white/5">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                                <BarChart3 size={16} /> Capacity Utilization
+                            </h3>
+                        </div>
+                        <div className="space-y-6">
+                            {WAREHOUSES.map(wh => (
+                                <div key={wh.id} className="space-y-2">
+                                    <div className="flex justify-between text-xs font-medium">
+                                        <span className="text-slate-200">{wh.name} <span className="text-[10px] text-slate-500 ml-2">{wh.code}</span></span>
+                                        <span className="text-slate-400">{(wh.stock / wh.cap * 100).toFixed(1)}%</span>
+                                    </div>
+                                    <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                        <div 
+                                            className={`h-full transition-all duration-1000 ${wh.stock/wh.cap > 0.8 ? 'bg-red-500' : 'bg-odoo'}`} 
+                                            style={{ width: `${(wh.stock / wh.cap * 100)}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                                        <span>{wh.stock.toLocaleString()} units</span>
+                                        <span>{wh.cap.toLocaleString()} units capacity</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="p-4 border-t border-white/5 bg-slate-900/50">
-                        <button className="flex items-center w-full p-2 hover:bg-slate-800 rounded-lg transition-colors group">
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-xs font-bold text-white shadow-inner border border-white/10 ring-2 ring-transparent group-hover:ring-purple-500/50 transition-all">
-                                MA
-                            </div>
-                            <div className="ml-3 text-left overflow-hidden">
-                                <p className="text-sm font-medium text-white truncate group-hover:text-purple-300">Mitchell Admin</p>
-                                <p className="text-xs text-slate-500 truncate">Manager</p>
-                            </div>
-                            <Settings size={18} className="ml-auto text-slate-500 group-hover:rotate-90 transition-transform duration-500" />
+                    {/* Critical Alerts */}
+                    <div className="glass rounded-2xl p-6 border border-white/5 flex flex-col">
+                        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
+                            <Activity size={16} /> Operations Pulse
+                        </h3>
+                        <div className="flex-1 space-y-4">
+                            {[
+                                { title: 'Stockout Risk', desc: 'SKU-990 (Steel Bolts) in WH-SF', time: '12m ago', level: 'critical' },
+                                { title: 'Transfer Delayed', desc: 'TRF-0012 stuck in Transit', time: '45m ago', level: 'warning' },
+                                { title: 'QC Completion', desc: 'Batch #8812 approved by Mitchell', time: '1h ago', level: 'info' }
+                            ].map((alert, i) => (
+                                <div key={i} className="flex gap-4 p-3 rounded-xl hover:bg-white/5 transition-all border border-transparent hover:border-white/5 cursor-pointer">
+                                    <div className={`w-1 h-10 rounded-full ${alert.level === 'critical' ? 'bg-red-500' : alert.level === 'warning' ? 'bg-orange-500' : 'bg-blue-500'}`} />
+                                    <div>
+                                        <p className="text-xs font-bold text-white">{alert.title}</p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">{alert.desc}</p>
+                                        <span className="text-[9px] text-slate-600 mt-2 block font-medium">{alert.time}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <button className="w-full py-2 mt-4 border border-dashed border-white/10 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-300 hover:border-white/20 transition-all uppercase tracking-widest">
+                            View All Events
                         </button>
                     </div>
                 </div>
-            );
-        };
+            </div>
+        );
 
-        // 2. Dashboard Component
-        const Dashboard = ({ setView }) => {
-            return (
-                <div className="space-y-6 animate-fade-in pb-10 h-full overflow-y-auto pr-2">
-                    {/* Header */}
-                    <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
-                        <div>
-                            <h2 className="text-2xl font-bold text-white">Overview</h2>
-                            <p className="text-slate-400 text-sm mt-1">Real-time metrics from 4 connected nodes.</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <button className="glass px-4 py-2 rounded-lg text-slate-300 hover:text-white text-sm font-medium transition-colors border border-slate-700 hover:border-slate-500 flex items-center gap-2">
-                                <Filter size={16} /> Filter
-                            </button>
-                            <button onClick={() => setView('scanner')} className="bg-odoo hover:bg-[#5a3b52] text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center transition-all shadow-lg shadow-purple-900/30 hover:shadow-purple-900/50 active:scale-95">
-                                <Scan size={18} className="mr-2" /> Quick Scan
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {[
-                            { title: "Physical On Hand", val: "14,205", icon: Package, color: "text-blue-500", bg: "bg-blue-500", trend: "+12%" },
-                            { title: "Transfers Pending", val: "48", icon: ArrowRightLeft, color: "text-yellow-500", bg: "bg-yellow-500", trend: "+8%" },
-                            { title: "ATP (Promised)", val: "12,850", icon: CheckCircle, color: "text-purple-500", bg: "bg-purple-500", trend: "-2%" },
-                            { title: "Cycle Accuracy", val: "99.2%", icon: Database, color: "text-green-500", bg: "bg-green-500", trend: "+0.4%" }
-                        ].map((kpi, idx) => (
-                            <div key={idx} className="glass p-6 rounded-2xl relative overflow-hidden group hover:-translate-y-1 transition-transform border border-white/5">
-                                <div className={`absolute -right-6 -top-6 p-8 opacity-[0.03] group-hover:opacity-10 transition-opacity ${kpi.bg} rounded-full`}></div>
-                                <div className="flex justify-between items-start mb-4 relative z-10">
-                                    <div>
-                                        <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{kpi.title}</h3>
-                                        <span className="text-3xl font-bold text-white tracking-tight">{kpi.val}</span>
-                                    </div>
-                                    <div className={`p-2 rounded-lg ${kpi.bg} bg-opacity-20`}>
-                                        <kpi.icon size={20} className={kpi.color} />
-                                    </div>
-                                </div>
-                                <div className="flex items-center text-xs relative z-10">
-                                    <span className={`font-bold ${kpi.trend.includes('+') ? 'text-green-400' : 'text-red-400'} flex items-center`}>
-                                        {kpi.trend} 
-                                        {kpi.trend.includes('+') ? <ChevronDown className="rotate-180 ml-1" size={12}/> : <ChevronDown className="ml-1" size={12}/>}
-                                    </span>
-                                    <span className="text-slate-500 ml-2">vs last 7 days</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Warehouse Capacity */}
-                        <div className="glass rounded-2xl p-6 lg:col-span-2 border border-white/5">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    <BarChart3 size={20} className="text-slate-400" />
-                                    Warehouse Utilization
-                                </h3>
-                                <button className="text-xs font-medium text-purple-400 hover:text-purple-300 transition-colors">Detailed Report &rarr;</button>
-                            </div>
-                            <div className="space-y-6">
-                                {WAREHOUSES.map(wh => (
-                                    <div key={wh.id} className="group">
-                                        <div className="flex justify-between text-sm mb-2">
-                                            <span className="text-white font-medium flex items-center">
-                                                <div className={`w-2 h-2 rounded-full mr-2 shadow-[0_0_8px_currentColor] ${wh.fill > 90 ? 'bg-red-500 text-red-500' : wh.fill > 70 ? 'bg-yellow-500 text-yellow-500' : 'bg-green-500 text-green-500'}`}></div>
-                                                {wh.name}
-                                                <span className="ml-2 text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">{wh.code}</span>
-                                            </span>
-                                            <span className="text-slate-400 text-xs font-mono group-hover:text-white transition-colors">{wh.onHand.toLocaleString()} / {wh.capacity.toLocaleString()} Units</span>
-                                        </div>
-                                        <div className="w-full bg-slate-800/80 rounded-full h-2.5 overflow-hidden ring-1 ring-white/5">
-                                            <div className={`h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden ${wh.fill > 90 ? 'bg-red-500' : wh.fill > 70 ? 'bg-yellow-500' : 'bg-odoo'}`} style={{ width: `${wh.fill}%` }}>
-                                                <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Alerts Feed */}
-                        <div className="glass rounded-2xl p-6 flex flex-col h-full border border-white/5">
-                            <h3 className="text-lg font-semibold text-white mb-5 flex items-center">
-                                <AlertTriangle size={20} className="text-yellow-500 mr-2" />
-                                Action Required
-                            </h3>
-                            <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                                {[
-                                    { type: 'Critical', msg: 'Stockout Risk: FURN_8888', wh: 'WH-East', color: 'red' },
-                                    { type: 'Warning', msg: 'QC Bottleneck: 15 items > 24h', wh: 'WH-Quality', color: 'yellow' },
-                                    { type: 'Info', msg: 'Inbound PO0032 arriving', wh: 'Dock 4', color: 'blue' },
-                                    { type: 'Info', msg: 'System Maintenance in 2h', wh: 'System', color: 'purple' }
-                                ].map((alert, i) => (
-                                    <div key={i} className={`p-4 rounded-xl border bg-${alert.color}-500/5 border-${alert.color}-500/20 hover:bg-${alert.color}-500/10 cursor-pointer transition-all group`}>
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className={`text-${alert.color}-200 text-sm font-medium group-hover:text-${alert.color}-100`}>{alert.msg}</span>
-                                            <span className={`text-[10px] uppercase font-bold text-${alert.color}-400 bg-${alert.color}-500/10 px-1.5 py-0.5 rounded tracking-wide`}>{alert.type}</span>
-                                        </div>
-                                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Map size={10}/> {alert.wh}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <button className="mt-4 w-full py-2 text-xs text-slate-400 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg transition-colors">View All Notifications</button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 3. Scanner Logic Component
-        const Scanner = () => {
+        const ScannerUI = () => {
             const [scans, setScans] = useState([]);
             const [input, setInput] = useState('');
-            const [active, setActive] = useState(true);
+            const [isScanning, setIsScanning] = useState(true);
 
-            // GS1-128 Parsing Simulation
             const handleScan = (e) => {
                 e.preventDefault();
                 if (!input) return;
-
-                let type = 'Code 128';
-                let parsed = { sku: input };
+                
+                // GS1 Parser Logic Simulation
+                let type = 'Standard SKU';
+                let details = input;
                 let status = 'success';
-                let raw = input;
 
-                // Simulate GS1 Logic
-                if (input.includes('(') && input.includes(')')) {
+                if (input.startsWith('(01)')) {
                     type = 'GS1-128';
                     const gtin = input.match(/\(01\)(\d+)/)?.[1] || 'N/A';
-                    const lot = input.match(/\(10\)([a-zA-Z0-9]+)/)?.[1] || 'N/A';
-                    const weight = input.match(/\(310\)(\d+)/)?.[1] || 'N/A';
-                    parsed = { gtin, lot, weight: weight !== 'N/A' ? `${weight} kg` : null };
+                    const lot = input.match(/\(10\)([A-Z0-9]+)/)?.[1] || 'N/A';
+                    details = `GTIN: ${gtin} | LOT: ${lot}`;
                 }
 
-                if (input.toLowerCase().includes('error')) status = 'error';
+                if (input.toLowerCase().includes('err')) status = 'error';
 
-                setScans([{ id: Date.now(), raw, type, parsed, status, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) }, ...scans]);
+                const newScan = {
+                    id: Date.now(),
+                    raw: input,
+                    type,
+                    details,
+                    status,
+                    time: new Date().toLocaleTimeString()
+                };
+
+                setScans([newScan, ...scans]);
                 setInput('');
+                
+                // Voice Feedback Simulation
+                const audio = new Audio();
+                audio.src = status === 'success' 
+                    ? 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA' 
+                    : 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA';
+                // (Muted to avoid browser policy issues in sandbox)
             };
 
             return (
-                <div className="flex flex-col lg:flex-row gap-6 h-full animate-fade-in pb-6">
-                    {/* Viewfinder Section */}
-                    <div className="flex-1 flex flex-col gap-4">
-                        <div className="glass flex-1 rounded-2xl relative overflow-hidden flex flex-col border border-slate-700 shadow-2xl">
-                            {active ? (
-                                <div className="absolute inset-0 bg-black">
-                                    {/* Mock Camera Feed Background */}
-                                    <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1200')] bg-cover bg-center opacity-30 grayscale mix-blend-screen"></div>
-                                    <div className="scan-line top-1/2 z-10"></div>
-                                    
-                                    {/* Overlay UI */}
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
-                                        <div className="w-72 h-56 border-2 border-white/40 rounded-3xl relative backdrop-blur-[2px]">
-                                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-odoo -mt-1 -ml-1 rounded-tl-xl"></div>
-                                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-odoo -mt-1 -mr-1 rounded-tr-xl"></div>
-                                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-odoo -mb-1 -ml-1 rounded-bl-xl"></div>
-                                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-odoo -mb-1 -mr-1 rounded-br-xl"></div>
-                                            <div className="absolute top-2 right-2 flex gap-1">
-                                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                                <span className="text-[10px] text-red-500 font-bold tracking-widest">LIVE</span>
-                                            </div>
-                                        </div>
-                                        <p className="mt-4 text-white/80 font-mono text-xs bg-black/50 px-3 py-1 rounded">Align code within frame</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-500">
-                                    <div className="text-center">
-                                        <WifiOff size={64} className="mx-auto mb-4 opacity-20" />
-                                        <p className="font-medium">Camera Feed Paused</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Manual Entry Control Bar */}
-                            <div className="absolute bottom-0 w-full bg-gradient-to-t from-black/90 to-transparent p-6 z-30">
-                                <div className="flex gap-3 max-w-2xl mx-auto">
-                                    <button onClick={() => setActive(!active)} className="p-3 bg-slate-800/80 backdrop-blur rounded-xl text-white border border-slate-600 hover:bg-slate-700 transition-colors">
-                                        {active ? <Camera size={20} /> : <RefreshCw size={20} />}
-                                    </button>
-                                    <form onSubmit={handleScan} className="flex-1 relative">
-                                        <Scan className="absolute left-3 top-3.5 text-slate-500" size={18} />
-                                        <input 
-                                            autoFocus
-                                            value={input} 
-                                            onChange={(e) => setInput(e.target.value)} 
-                                            type="text" 
-                                            placeholder="Scan barcode or type manually (try '(01)...')" 
-                                            className="w-full bg-slate-900/80 backdrop-blur border border-slate-600 rounded-xl pl-10 pr-4 py-3 text-white focus:border-odoo focus:ring-1 focus:ring-odoo outline-none shadow-xl font-mono text-sm transition-all"
-                                        />
-                                    </form>
-                                </div>
+                <div className="p-8 h-full flex flex-col gap-6 fade-in">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-bold text-white tracking-tight">Multi-Standard Scanner</h2>
+                            <p className="text-slate-400 text-sm mt-1">Mobile-optimized interface for Zebra/Honeywell and Camera devices.</p>
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="text-right">
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Session Count</p>
+                                <p className="text-xl font-mono font-bold text-odoo">{scans.length}</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right Panel: Results & History */}
-                    <div className="w-full lg:w-96 flex flex-col gap-4 h-full overflow-hidden">
-                        {/* Latest Scan Result Card */}
-                        <div className={`glass p-0 rounded-2xl border-l-4 transition-all overflow-hidden relative ${scans[0]?.status === 'error' ? 'border-red-500' : scans[0]?.status === 'success' ? 'border-green-500' : 'border-slate-600'}`}>
-                            {scans[0] ? (
-                                <div className="animate-fade-in">
-                                    <div className={`p-4 ${scans[0].status === 'success' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className={`text-xs font-bold uppercase px-2 py-1 rounded-md tracking-wider flex items-center gap-1 ${scans[0].status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                                {scans[0].status === 'success' ? <CheckCircle size={12}/> : <AlertTriangle size={12}/>}
-                                                {scans[0].status === 'success' ? 'Matched' : 'Invalid'}
-                                            </span>
-                                            <span className="text-xs text-slate-400 font-mono">{scans[0].time}</span>
+                    <div className="flex-1 flex gap-6 overflow-hidden">
+                        {/* Camera Viewfinder */}
+                        <div className="flex-1 glass rounded-3xl overflow-hidden relative border border-white/10 shadow-2xl bg-black">
+                            {isScanning ? (
+                                <React.Fragment>
+                                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-500/10 to-transparent opacity-40" />
+                                    <div className="scanner-line" />
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-80 h-48 border-2 border-white/20 rounded-2xl relative">
+                                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-odoo -mt-1 -ml-1 rounded-tl-lg" />
+                                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-odoo -mt-1 -mr-1 rounded-tr-lg" />
+                                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-odoo -mb-1 -ml-1 rounded-bl-lg" />
+                                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-odoo -mb-1 -mr-1 rounded-br-lg" />
+                                            <div className="absolute top-2 right-2 flex gap-1 items-center bg-black/40 px-2 py-1 rounded">
+                                                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                                                <span className="text-[9px] font-bold text-white tracking-widest">LIVE FEED</span>
+                                            </div>
                                         </div>
-                                        <h2 className="text-lg font-mono font-bold text-white break-all leading-tight">{scans[0].raw}</h2>
                                     </div>
-                                    
-                                    {scans[0].type === 'GS1-128' && (
-                                        <div className="p-4 grid grid-cols-2 gap-3 bg-slate-900/40">
-                                            <div className="bg-slate-900 p-2.5 rounded-lg border border-white/5">
-                                                <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">GTIN / SKU</label>
-                                                <div className="text-sm font-mono text-blue-300">{scans[0].parsed.gtin}</div>
-                                            </div>
-                                            <div className="bg-slate-900 p-2.5 rounded-lg border border-white/5">
-                                                <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Batch / Lot</label>
-                                                <div className="text-sm font-mono text-purple-300">{scans[0].parsed.lot}</div>
-                                            </div>
-                                            {scans[0].parsed.weight && (
-                                                <div className="bg-slate-900 p-2.5 rounded-lg border border-white/5 col-span-2">
-                                                    <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 block">Net Weight</label>
-                                                    <div className="text-sm font-mono text-yellow-300">{scans[0].parsed.weight}</div>
-                                                </div>
-                                            )}
+                                    {/* Mock Camera Background */}
+                                    <div className="absolute inset-0 -z-10 opacity-30 bg-[url('https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=1000')] bg-center bg-cover" />
+                                </React.Fragment>
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600">
+                                    <Camera size={48} className="mb-4 opacity-20" />
+                                    <p className="text-sm font-medium">Camera hardware disconnected</p>
+                                </div>
+                            )}
+
+                            {/* Control Overlay */}
+                            <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/80 to-transparent">
+                                <form onSubmit={handleScan} className="max-w-xl mx-auto flex gap-4">
+                                    <div className="flex-1 relative">
+                                        <QrCode className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                        <input 
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            autoFocus
+                                            type="text" 
+                                            placeholder="Manually enter code or scan..." 
+                                            className="w-full bg-slate-900/90 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-odoo transition-all shadow-2xl font-mono text-white"
+                                        />
+                                    </div>
+                                    <button type="submit" className="p-4 bg-odoo rounded-2xl text-white hover:bg-[#5a3b52] transition-all shadow-lg active:scale-95">
+                                        <RefreshCw size={24} />
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        {/* Recent History Sidebar */}
+                        <div className="w-96 flex flex-col gap-4 overflow-hidden">
+                            <div className="glass rounded-3xl p-6 flex-1 flex flex-col overflow-hidden border border-white/5">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Session Log</h3>
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                                    {scans.length === 0 ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                                            <Package size={32} className="mb-2 opacity-20" />
+                                            <p className="text-xs italic">Awaiting scans...</p>
                                         </div>
+                                    ) : (
+                                        scans.map(s => (
+                                            <div key={s.id} className={`p-4 rounded-2xl border transition-all ${s.status === 'success' ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'} animate-fade-in`}>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${s.status === 'success' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                                                        {s.type}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 font-mono">{s.time}</span>
+                                                </div>
+                                                <p className="text-sm font-bold text-white font-mono truncate">{s.raw}</p>
+                                                <p className="text-[11px] text-slate-400 mt-1">{s.details}</p>
+                                            </div>
+                                        ))
                                     )}
                                 </div>
-                            ) : (
-                                <div className="text-center text-slate-500 py-12 flex flex-col items-center">
-                                    <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-3">
-                                        <QrCode size={32} className="opacity-50" />
-                                    </div>
-                                    <p className="text-sm font-medium">Ready to scan</p>
-                                    <p className="text-xs text-slate-600 mt-1">Waiting for input...</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Scan History List */}
-                        <div className="glass flex-1 rounded-2xl flex flex-col overflow-hidden border border-white/5">
-                            <div className="p-4 bg-slate-800/50 border-b border-white/5 flex justify-between items-center">
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Session History</span>
-                                <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{scans.length}</span>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                                {scans.map(s => (
-                                    <div key={s.id} className="flex items-center p-3 rounded-lg hover:bg-white/5 cursor-pointer group transition-colors border border-transparent hover:border-white/5">
-                                        <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${s.status === 'success' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`}></div>
-                                        <div className="flex-1 min-w-0 mr-3">
-                                            <p className="text-sm font-mono text-slate-300 truncate">{s.raw}</p>
-                                            <p className="text-[10px] text-slate-500">{s.type}</p>
-                                        </div>
-                                        <span className="text-xs text-slate-600 font-mono group-hover:text-slate-400">{s.time}</span>
-                                    </div>
-                                ))}
-                                {scans.length === 0 && <div className="text-center text-slate-600 text-xs py-4 italic">No history available</div>}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 4. Heatmap Component
-        const Heatmap = () => {
-            const zones = useMemo(() => GENERATE_ZONES(), []);
-            return (
-                <div className="h-full flex flex-col animate-fade-in pb-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <div>
-                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                <Map size={24} className="text-odoo" />
-                                Zone Utilization Map
-                            </h2>
-                            <p className="text-sm text-slate-400 mt-1">Visualizing density for WH-Main (San Francisco)</p>
-                        </div>
-                        <div className="flex gap-4 text-xs bg-slate-900/50 p-2 rounded-lg border border-white/5">
-                            <span className="flex items-center text-slate-400"><div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded mr-2"></div> Optimal (&lt;50%)</span>
-                            <span className="flex items-center text-slate-400"><div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500 rounded mr-2"></div> Warning (50-85%)</span>
-                            <span className="flex items-center text-slate-400"><div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded mr-2"></div> Critical (&gt;85%)</span>
-                        </div>
-                    </div>
-                    
-                    <div className="glass rounded-2xl p-6 flex-1 overflow-y-auto border border-white/5 shadow-inner">
-                        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-12 gap-3">
-                            {zones.map(z => {
-                                let colors = z.utilization > 85 ? 'bg-red-500/10 border-red-500/40 text-red-400 hover:bg-red-500/20' : z.utilization > 50 ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/20' : 'bg-green-500/10 border-green-500/40 text-green-400 hover:bg-green-500/20';
-                                return (
-                                    <div key={z.id} className={`aspect-square border rounded-lg p-2 flex flex-col justify-between cursor-pointer transition-all hover:scale-105 hover:shadow-lg relative group ${colors}`}>
-                                        <div className="flex justify-between items-start">
-                                            <span className="text-[10px] font-mono font-bold opacity-70">{z.code}</span>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-lg font-bold tracking-tighter">{z.utilization}%</span>
-                                        </div>
-                                        {/* Tooltip */}
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 bg-slate-900 border border-slate-700 p-2 rounded text-xs text-white opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-xl">
-                                            <div className="font-bold">{z.category}</div>
-                                            <div className="text-slate-400">{z.items} Items</div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 5. Transfer Wizard Component
-        const TransferWizard = () => {
-            const [qty, setQty] = useState(50);
-            return (
-                <div className="h-full flex items-center justify-center p-4 animate-fade-in pb-10">
-                    <div className="glass w-full max-w-3xl rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative">
-                        <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-odoo to-purple-400"></div>
-                        
-                        <div className="bg-slate-900/50 p-6 border-b border-white/5 flex justify-between items-center">
-                            <div>
-                                <h2 className="text-xl font-bold text-white flex items-center">
-                                    <Truck className="mr-3 text-odoo" /> Smart Transfer Wizard
-                                </h2>
-                                <p className="text-xs text-slate-400 mt-1 ml-9">Automated routing based on Push/Pull rules</p>
-                            </div>
-                            <div className="flex gap-2 text-xs font-mono text-slate-500">
-                                <span>ID: OP-2023-998</span>
-                            </div>
-                        </div>
-
-                        <div className="p-8">
-                            {/* Route Visualization */}
-                            <div className="flex items-center justify-between mb-12 relative px-4">
-                                <div className="absolute top-1/2 left-10 right-10 h-0.5 bg-slate-700 -z-10 border-t border-dashed border-slate-600"></div>
-                                
-                                <div className="bg-slate-800 p-4 rounded-xl border border-slate-600 z-10 w-40 text-center shadow-lg hover:border-odoo transition-colors cursor-pointer">
-                                    <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-2 text-slate-300 font-bold border border-slate-600">A</div>
-                                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">SOURCE</div>
-                                    <div className="text-white font-bold text-sm">WH-Main</div>
-                                    <div className="text-green-400 text-xs mt-1 bg-green-900/20 py-0.5 rounded">450 Available</div>
-                                </div>
-
-                                <div className="bg-slate-900 p-3 rounded-full border border-slate-600 text-odoo z-10 shadow-xl ring-4 ring-[#0f172a]">
-                                    <ArrowRightLeft className="animate-[spin_3s_linear_infinite_reverse]" />
-                                </div>
-
-                                <div className="bg-slate-800 p-4 rounded-xl border border-slate-600 z-10 w-40 text-center shadow-lg hover:border-odoo transition-colors cursor-pointer">
-                                    <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-2 text-slate-300 font-bold border border-slate-600">B</div>
-                                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">DESTINATION</div>
-                                    <div className="text-white font-bold text-sm">WH-East</div>
-                                    <div className="text-yellow-400 text-xs mt-1 bg-yellow-900/20 py-0.5 rounded">Low Stock</div>
-                                </div>
-                            </div>
-
-                            {/* Form Controls */}
-                            <div className="grid grid-cols-2 gap-8 mb-8">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-2">Product Selection</label>
-                                    <div className="flex items-center bg-slate-900 border border-slate-600 rounded-lg p-3 focus-within:border-odoo focus-within:ring-1 focus-within:ring-odoo transition-all">
-                                        <Package className="text-slate-500 mr-3" size={20} />
-                                        <div className="flex-1">
-                                            <div className="text-white font-mono text-sm">FURN_7888</div>
-                                            <div className="text-xs text-slate-500">Office Chair, Black, Ergonomic</div>
-                                        </div>
-                                        <ChevronDown size={16} className="text-slate-600" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-2">
-                                        <label className="block text-sm font-medium text-slate-400">Transfer Quantity</label>
-                                        <span className="text-sm font-bold text-odoo bg-odoo/10 px-2 rounded">{qty} Units</span>
-                                    </div>
-                                    <input type="range" min="1" max="450" value={qty} onChange={e => setQty(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-odoo mt-2" />
-                                    <div className="flex justify-between text-xs text-slate-600 mt-1">
-                                        <span>1</span>
-                                        <span>450 (Max)</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* AI Recommendation */}
-                            <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 flex items-start mb-8 backdrop-blur-sm">
-                                <div className="p-2 bg-blue-500/20 rounded-lg mr-4 shrink-0">
-                                    <Box className="text-blue-400" size={20} />
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-bold text-blue-200">AI Logistics Optimization</h4>
-                                    <p className="text-xs text-blue-300/70 mt-1 leading-relaxed">
-                                        Based on sales velocity in NY, transferring <strong className="text-blue-200">{qty} units</strong> covers demand for exactly 14 days. 
-                                        This route utilizes the daily 4 PM truck to minimize transit costs.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                                <button className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors text-sm font-medium">Cancel Operation</button>
-                                <button className="px-8 py-2.5 bg-odoo text-white rounded-lg hover:bg-[#5a3b52] shadow-lg shadow-purple-900/30 flex items-center text-sm font-bold transition-transform active:scale-95 border border-white/10">
-                                    Validate Transfer <CheckCircle size={18} className="ml-2" />
+                                <button onClick={() => setScans([])} className="w-full py-2 mt-4 text-[10px] font-bold text-slate-500 hover:text-red-400 transition-colors uppercase tracking-widest">
+                                    Clear History
                                 </button>
                             </div>
                         </div>
@@ -576,119 +431,311 @@
             );
         };
 
-        // 6. Logs Component
-        const LogsTable = () => {
+        const Heatmap = () => {
+            const [selected, setSelected] = useState(null);
+            
             return (
-                <div className="glass rounded-2xl flex flex-col h-full overflow-hidden animate-fade-in mb-6 border border-white/5">
-                    <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-900/30">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
-                                <Database size={20} className="text-slate-400" />
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-bold text-white">System Audit Logs</h2>
-                                <p className="text-xs text-slate-500 font-mono">Model: adv_inv.barcode.log</p>
-                            </div>
+                <div className="p-8 h-full flex flex-col gap-6 fade-in overflow-y-auto pb-20">
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <h2 className="text-2xl font-bold text-white tracking-tight">Warehouse Density Map</h2>
+                            <p className="text-slate-400 text-sm mt-1">WH-Main (SF) / Storage Zone Alpha</p>
                         </div>
-                        <div className="flex gap-2">
-                            <button className="flex items-center px-3 py-2 bg-slate-800 text-slate-300 rounded-lg border border-slate-600 text-xs hover:bg-slate-700 transition-colors"><Filter size={14} className="mr-2" /> Filter</button>
-                            <button className="flex items-center px-3 py-2 bg-slate-800 text-slate-300 rounded-lg border border-slate-600 text-xs hover:bg-slate-700 transition-colors"><Download size={14} className="mr-2" /> Export CSV</button>
+                        <div className="flex gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded bg-green-500/30 border border-green-500/50" />
+                                <span className="text-[10px] text-slate-400">Available</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded bg-yellow-500/30 border border-yellow-500/50" />
+                                <span className="text-[10px] text-slate-400">Moderate</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded bg-red-500/30 border border-red-500/50" />
+                                <span className="text-[10px] text-slate-400">Critical</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="overflow-auto flex-1 custom-scrollbar">
-                        <table className="w-full text-left text-sm text-slate-400">
-                            <thead className="bg-slate-900/80 text-slate-200 uppercase text-[10px] font-bold tracking-wider sticky top-0 backdrop-blur z-10 shadow-sm">
-                                <tr>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4">Timestamp</th>
-                                    <th className="px-6 py-4">User</th>
-                                    <th className="px-6 py-4">Operation</th>
-                                    <th className="px-6 py-4">Raw Data / SKU</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1">
+                        <div className="lg:col-span-3 glass rounded-3xl p-8 border border-white/5 shadow-inner">
+                            <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+                                {ZONES.map(z => (
+                                    <div 
+                                        key={z.id}
+                                        onClick={() => setSelected(z)}
+                                        className={`aspect-square rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 group relative ${
+                                            z.utilization > 80 ? 'bg-red-500/10 border-red-500/40' :
+                                            z.utilization > 50 ? 'bg-yellow-500/10 border-yellow-500/40' :
+                                            'bg-green-500/10 border-green-500/40'
+                                        } ${selected?.id === z.id ? 'ring-2 ring-white border-white' : ''}`}
+                                    >
+                                        <span className="text-xs font-bold text-white font-mono">{z.label}</span>
+                                        <span className="text-[10px] font-medium text-slate-400 mt-1">{z.utilization}%</span>
+                                        
+                                        {/* Hover Tooltip */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 glass p-2 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-20 border border-white/10 shadow-2xl">
+                                            <p className="text-[10px] font-bold text-white mb-1">Zone {z.label}</p>
+                                            <p className="text-[9px] text-slate-400">{z.items.toLocaleString()} Items</p>
+                                            <p className="text-[9px] text-slate-400">{z.temp}°C Sensor</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="glass rounded-3xl p-6 border border-white/5 flex flex-col gap-6">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Zone Details</h3>
+                            {selected ? (
+                                <div className="space-y-6 fade-in">
+                                    <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                                        <p className="text-3xl font-bold text-white font-mono">{selected.label}</p>
+                                        <p className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-widest">Selected Location</p>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <div className="flex justify-between text-[10px] text-slate-500 font-bold mb-1">
+                                                <span>FILL LEVEL</span>
+                                                <span>{selected.utilization}%</span>
+                                            </div>
+                                            <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="h-full bg-odoo" style={{ width: `${selected.utilization}%` }} />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-white/5 p-3 rounded-xl border border-white/5 text-center">
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">Stored Items</p>
+                                                <p className="text-lg font-bold text-white">{selected.items}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-3 rounded-xl border border-white/5 text-center">
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">Temperature</p>
+                                                <p className="text-lg font-bold text-white">{selected.temp}°</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="pt-4 border-t border-white/5">
+                                        <p className="text-[10px] text-slate-500 font-bold uppercase mb-3">Top Products in Zone</p>
+                                        {['STEEL-BOLT-M8', 'BRASS-HINGE-01', 'ALU-PLATE-500'].map(p => (
+                                            <div key={p} className="flex justify-between items-center py-2 text-xs font-mono text-slate-300 border-b border-white/5 last:border-0">
+                                                <span>{p}</span>
+                                                <ChevronRight size={12} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-center text-slate-600">
+                                    <Maximize2 size={32} className="mb-4 opacity-20" />
+                                    <p className="text-xs italic">Select a zone on the map to view granular stock data</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Transfers = () => {
+            const [step, setStep] = useState(1);
+            
+            return (
+                <div className="p-8 h-full flex flex-col items-center justify-center fade-in">
+                    <div className="w-full max-w-4xl glass rounded-[40px] overflow-hidden border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] relative">
+                        <div className="absolute top-0 w-full h-1.5 bg-gradient-to-r from-odoo via-purple-500 to-indigo-600" />
+                        
+                        <div className="p-10 flex flex-col lg:flex-row gap-12">
+                            <div className="lg:w-1/3 space-y-8">
+                                <div className="space-y-2">
+                                    <h2 className="text-3xl font-bold text-white tracking-tight">Smart Transfer</h2>
+                                    <p className="text-slate-400 text-sm leading-relaxed">Cross-warehouse routing with automated replenishment logic.</p>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    {[
+                                        { s: 1, l: 'Location Routing', icon: Globe },
+                                        { s: 2, l: 'Product Selection', icon: Package },
+                                        { s: 3, l: 'Batch Validation', icon: ShieldCheck }
+                                    ].map(st => (
+                                        <div key={st.s} className={`flex items-center gap-4 transition-all ${step === st.s ? 'translate-x-2' : 'opacity-40'}`}>
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border font-bold ${step === st.s ? 'bg-odoo border-odoo text-white' : 'border-white/10 text-slate-400'}`}>
+                                                <st.icon size={20} />
+                                            </div>
+                                            <span className={`text-sm font-bold tracking-tight ${step === st.s ? 'text-white' : 'text-slate-600'}`}>{st.l}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex-1 bg-white/5 rounded-3xl p-8 border border-white/5 min-h-[400px] flex flex-col">
+                                {step === 1 && (
+                                    <div className="flex-1 space-y-8 fade-in">
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Source Warehouse</label>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {WAREHOUSES.map(wh => (
+                                                    <div key={wh.id} className="p-4 rounded-2xl bg-black/40 border border-white/10 hover:border-odoo cursor-pointer transition-all">
+                                                        <p className="text-xs font-bold text-white">{wh.name}</p>
+                                                        <p className="text-[10px] text-slate-500 font-mono mt-1">{wh.code}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-center">
+                                            <div className="p-2 bg-odoo/20 rounded-full text-odoo">
+                                                <ArrowRightLeft className="rotate-90" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Destination Node</label>
+                                            <div className="p-4 rounded-2xl bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-slate-500 text-xs gap-2 hover:bg-white/10 cursor-pointer">
+                                                <Plus size={16} /> Select Terminal
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {step === 2 && (
+                                    <div className="flex-1 space-y-6 fade-in">
+                                        <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex gap-4">
+                                            <div className="p-2 bg-blue-500 rounded-lg text-white self-start">
+                                                <Database size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-blue-200">System Recommendation</p>
+                                                <p className="text-[10px] text-blue-300/80 mt-1 leading-relaxed">
+                                                    Transfer 450 units of <b>ALU-PRO-01</b> to WH-QC to cover projected quality testing backlogs for Week 42.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {['ALU-PRO-01', 'ALU-PRO-02', 'BOLT-X-99'].map(p => (
+                                                <div key={p} className="flex items-center gap-4 p-4 rounded-2xl bg-black/40 border border-white/5 group hover:border-white/20">
+                                                    <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 group-hover:text-odoo transition-colors">
+                                                        <Box size={20} />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-xs font-bold text-white">{p}</p>
+                                                        <p className="text-[9px] text-slate-500 font-mono">Stock: 2,400 | Reserved: 112</p>
+                                                    </div>
+                                                    <input type="checkbox" className="w-5 h-5 accent-odoo bg-transparent" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="pt-8 mt-auto flex justify-between items-center">
+                                    <button 
+                                        onClick={() => setStep(s => Math.max(1, s - 1))}
+                                        className="text-xs font-bold text-slate-500 hover:text-white transition-colors"
+                                    >
+                                        Back
+                                    </button>
+                                    <button 
+                                        onClick={() => setStep(s => Math.min(3, s + 1))}
+                                        className="px-8 py-3 bg-odoo text-white rounded-2xl text-xs font-bold shadow-xl shadow-purple-900/30 hover:bg-[#5a3b52] active:scale-95 transition-all flex items-center gap-2"
+                                    >
+                                        {step === 3 ? 'Finalize & Post' : 'Continue'} <ChevronRight size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AuditLogs = () => (
+            <div className="p-8 h-full flex flex-col gap-6 fade-in overflow-hidden">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">System Audit Trail</h2>
+                        <p className="text-slate-400 text-sm mt-1">Immutable ledger of every inventory event on Odoo 18 ORM.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/10 transition-all">
+                            <Filter size={14} /> Filter Logs
+                        </button>
+                        <button className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/10 transition-all">
+                            <Download size={14} /> Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-1 glass rounded-3xl border border-white/5 overflow-hidden flex flex-col shadow-2xl">
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-white/5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-white/5">
+                                    <th className="px-8 py-5">Status</th>
+                                    <th className="px-6 py-5">Event ID</th>
+                                    <th className="px-6 py-5">Operation</th>
+                                    <th className="px-6 py-5">Target SKU/Ref</th>
+                                    <th className="px-6 py-5">Origin/Destination</th>
+                                    <th className="px-6 py-5">User</th>
+                                    <th className="px-6 py-5 text-right">Timestamp</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {MOCK_LOGS.map(log => (
+                                {INITIAL_LOGS.map(log => (
                                     <tr key={log.id} className="hover:bg-white/5 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border ${log.status === 'success' ? 'bg-green-500/10 text-green-400 border-green-500/20' : log.status === 'error' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>
+                                        <td className="px-8 py-5">
+                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
+                                                log.status === 'success' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
+                                                log.status === 'warning' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
+                                                'bg-red-500/10 text-red-500 border-red-500/20'
+                                            }`}>
                                                 {log.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 font-mono text-xs text-slate-300">{log.time}</td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-5 text-xs font-mono font-bold text-slate-300">{log.id}</td>
+                                        <td className="px-6 py-5 text-xs font-medium text-white">{log.action}</td>
+                                        <td className="px-6 py-5 text-xs font-mono text-slate-400 group-hover:text-odoo transition-colors">{log.target}</td>
+                                        <td className="px-6 py-5 text-xs text-slate-400">{log.loc}</td>
+                                        <td className="px-6 py-5">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[10px] text-white">
-                                                    {log.user.charAt(0)}
-                                                </div>
-                                                <span className="text-white text-xs">{log.user}</span>
+                                                <div className="w-6 h-6 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-[9px] text-slate-400">{log.user.charAt(0)}</div>
+                                                <span className="text-xs text-slate-300 font-medium">{log.user}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-xs font-medium">{log.action}</td>
-                                        <td className="px-6 py-4 font-mono text-xs text-slate-500 group-hover:text-slate-300">{log.sku}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="p-1 hover:bg-slate-700 rounded text-slate-500 hover:text-white transition-colors"><MoreVertical size={16} /></button>
-                                        </td>
+                                        <td className="px-6 py-5 text-right text-xs font-mono text-slate-500">{log.time}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
                 </div>
-            );
-        };
+            </div>
+        );
 
-        // --- MAIN APP ---
         const App = () => {
-            const [activeView, setActiveView] = useState('dashboard');
-            
-            const renderContent = () => {
-                switch(activeView) {
-                    case 'dashboard': return <Dashboard setView={setActiveView} />;
-                    case 'scanner': return <Scanner />;
-                    case 'heatmap': return <Heatmap />;
-                    case 'transfers': return <TransferWizard />;
-                    case 'logs': return <LogsTable />;
-                    default: return <Dashboard />;
-                }
-            };
+            const [view, setView] = useState('dashboard');
 
             return (
-                <div className="flex h-screen w-screen bg-[#0f172a] text-slate-200 font-sans overflow-hidden selection:bg-purple-500/30">
-                    <Sidebar activeView={activeView} setView={setActiveView} />
+                <div className="flex h-screen w-screen overflow-hidden">
+                    <Sidebar currentView={view} setView={setView} />
                     
-                    <div className="flex-1 flex flex-col relative overflow-hidden bg-slate-900/50">
-                        {/* Background Ambiance Effects */}
-                        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px] pointer-events-none"></div>
-                        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[100px] pointer-events-none"></div>
+                    <main className="flex-1 flex flex-col bg-slate-950/40 relative">
+                        {/* Abstract Background Accents */}
+                        <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
+                        <div className="absolute bottom-[-10%] left-[-5%] w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
                         
-                        {/* Top Navigation */}
-                        <header className="h-20 glass sticky top-0 z-40 px-8 flex items-center justify-between shrink-0 border-b border-white/5">
-                            <div className="flex items-center text-slate-400 bg-slate-900/50 px-4 py-2.5 rounded-xl border border-slate-700/50 w-96 focus-within:border-odoo focus-within:ring-1 focus-within:ring-odoo/50 transition-all shadow-inner">
-                                <Search size={18} className="mr-3 text-slate-500" />
-                                <input type="text" placeholder="Search products, transfers, or locations..." className="bg-transparent border-none focus:ring-0 text-sm w-full text-white placeholder-slate-500 outline-none" />
-                            </div>
-                            
-                            <div className="flex items-center space-x-6">
-                                <div className="flex items-center text-green-400 text-xs font-bold px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.1)]">
-                                    <Wifi size={14} className="mr-2" /> ONLINE
+                        <TopBar />
+                        
+                        <div className="flex-1 relative overflow-hidden">
+                            {view === 'dashboard' && <Dashboard />}
+                            {view === 'scanner' && <ScannerUI />}
+                            {view === 'heatmap' && <Heatmap />}
+                            {view === 'transfers' && <Transfers />}
+                            {view === 'logs' && <AuditLogs />}
+                            {view === 'settings' && (
+                                <div className="p-12 flex flex-col items-center justify-center h-full text-slate-600 opacity-30 italic">
+                                    <Settings size={64} className="mb-4" />
+                                    <p>Odoo Core Settings Engine v18.0.2</p>
                                 </div>
-                                <div className="h-6 w-px bg-slate-700"></div>
-                                <button className="relative text-slate-400 hover:text-white transition-colors p-2 hover:bg-slate-800 rounded-lg">
-                                    <Bell size={20} />
-                                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0f172a]"></span>
-                                </button>
-                                <button className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">
-                                    <Settings size={20} />
-                                </button>
-                            </div>
-                        </header>
-
-                        {/* Main Content Area */}
-                        <main className="flex-1 p-8 overflow-hidden relative z-10">
-                            {renderContent()}
-                        </main>
-                    </div>
+                            )}
+                        </div>
+                    </main>
                 </div>
             );
         };
@@ -696,5 +743,7 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
+</body>
+</html>
 </body>
 </html>
