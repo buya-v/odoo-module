@@ -11,24 +11,101 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --odoo-purple: #714B67;
+            --odoo-success: #28A745;
+            --odoo-warning: #FFC107;
+            --odoo-surface: #020617;
+        }
+
         body { 
-            background-color: #020617; 
+            background-color: var(--odoo-surface); 
             color: #f8fafc; 
             font-family: 'Inter', sans-serif; 
             margin: 0;
             overflow: hidden;
         }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
-        .odoo-purple { color: #714B67; }
-        .bg-odoo { background-color: #714B67; }
+
+        .glass { 
+            background: rgba(30, 41, 59, 0.4); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid rgba(255,255,255,0.08); 
+        }
+
+        .bg-odoo { background-color: var(--odoo-purple); }
         .bg-odoo:hover { background-color: #5a3c52; }
-        .sidebar-item-active { background: rgba(113, 75, 103, 0.2); border-left: 4px solid #714B67; }
-        .scanner-viewport { position: relative; overflow: hidden; background: #000; height: 300px; border-radius: 8px; }
-        .scan-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #28A745; box-shadow: 0 0 15px #28A745; animation: scan 2s linear infinite; }
-        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .heatmap-cell { transition: all 0.3s ease; cursor: pointer; }
-        .heatmap-cell:hover { transform: scale(1.1); z-index: 10; }
+        .text-odoo { color: #d8b4fe; }
+        
+        .sidebar-active { 
+            background: rgba(113, 75, 103, 0.2); 
+            border-left: 4px solid var(--odoo-purple); 
+            color: white;
+        }
+
+        .scanner-view {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #28A745;
+            box-shadow: 0 0 20px #28A745;
+            animation: scanning 2.5s ease-in-out infinite;
+        }
+
+        @keyframes scanning {
+            0% { top: 0% }
+            50% { top: 100% }
+            100% { top: 0% }
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 4px;
+        }
+
+        .bin-cell {
+            aspect-ratio: 1;
+            border-radius: 2px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .bin-cell:hover {
+            transform: scale(1.2);
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+
+        .animate-slide-up {
+            animation: slideUp 0.4s ease-out forwards;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
@@ -36,422 +113,323 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
-        
-        // --- Icons Implementation ---
+
+        // --- UI Components ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const LucideIcon = lucide[name.charAt(0).toUpperCase() + name.slice(1)];
             return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
         };
 
-        // --- Mock Data & Constants ---
-        const INITIAL_STOCK = [
-            { id: 1, sku: 'PRO-100', name: 'Zebra TC52 Scanner', lot: 'L-9982', exp: '2026-12-31', physical: 42, atp: 38, zone: 'A1-04' },
-            { id: 2, sku: 'PRO-205', name: 'Industrial Conveyor Belt', lot: 'L-1102', exp: '2030-01-15', physical: 12, atp: 12, zone: 'B2-11' },
-            { id: 3, sku: 'PRO-330', name: 'Rugged Tablet Case', lot: 'L-4451', exp: '2025-06-20', physical: 156, atp: 140, zone: 'A2-02' },
-            { id: 4, sku: 'PRO-882', name: 'Thermal Labels (Roll)', lot: 'L-0021', exp: '2027-04-10', physical: 8, atp: 5, zone: 'C1-09' },
-        ];
-
-        const WAREHOUSE_ZONES = [
-            { id: 'Z1', name: 'Main Aisle A', occupancy: 85 },
-            { id: 'Z2', name: 'Secondary B', occupancy: 42 },
-            { id: 'Z3', name: 'Cold Storage C', occupancy: 12 },
-            { id: 'Z4', name: 'Bulk D', occupancy: 95 },
-        ];
-
-        // --- Components ---
-
-        const Sidebar = ({ activeTab, setActiveTab }) => {
-            const menuItems = [
-                { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard' },
-                { id: 'scanner', icon: 'ScanBarcode', label: 'GS1 Scanner' },
-                { id: 'heatmap', icon: 'Map', label: 'Warehouse Map' },
-                { id: 'transfer', icon: 'ArrowRightLeft', label: 'Smart Transfer' },
-                { id: 'logs', icon: 'ClipboardList', label: 'Audit Logs' },
-                { id: 'settings', icon: 'Settings', label: 'Configuration' },
-            ];
-
-            return (
-                <div className="w-64 glass h-screen flex flex-col fixed left-0 top-0">
-                    <div className="p-6 flex items-center gap-3">
-                        <div className="w-10 h-10 bg-odoo flex items-center justify-center rounded-lg shadow-lg">
-                            <Icon name="Package" size={24} />
-                        </div>
-                        <h1 className="font-bold text-xl tracking-tight">Odoo <span className="text-purple-400">18</span></h1>
-                    </div>
-                    
-                    <nav className="flex-1 mt-4">
-                        {menuItems.map(item => (
-                            <button
-                                key={item.id}
-                                onClick={() => setActiveTab(item.id)}
-                                className={`w-full flex items-center gap-4 px-6 py-4 transition-all ${activeTab === item.id ? 'sidebar-item-active text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                            >
-                                <Icon name={item.icon} size={20} />
-                                <span className="font-medium">{item.label}</span>
-                            </button>
-                        ))}
-                    </nav>
-
-                    <div className="p-6 border-t border-slate-800">
-                        <div className="flex items-center gap-3 p-2 bg-slate-900 rounded-lg">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center font-bold text-xs">MA</div>
-                            <div className="overflow-hidden">
-                                <p className="text-sm font-semibold truncate">Marc André</p>
-                                <p className="text-[10px] text-slate-500 uppercase">Warehouse Director</p>
-                            </div>
-                        </div>
-                    </div>
+        const Card = ({ children, title, icon, className = "" }) => (
+            <div className={`glass rounded-xl p-6 ${className}`}>
+                <div className="flex items-center gap-3 mb-6">
+                    {icon && <div className="p-2 bg-slate-800 rounded-lg text-odoo"><Icon name={icon} size={18} /></div>}
+                    <h3 className="font-bold text-slate-100 tracking-tight">{title}</h3>
                 </div>
-            );
-        };
-
-        const TopNav = ({ title }) => (
-            <header className="h-16 glass sticky top-0 z-40 flex items-center justify-between px-8 ml-64">
-                <h2 className="text-lg font-semibold capitalize">{title.replace('-', ' ')}</h2>
-                <div className="flex items-center gap-6">
-                    <div className="relative">
-                        <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input 
-                            type="text" 
-                            placeholder="Search SKU, Lot, or Bin..." 
-                            className="bg-slate-900/50 border border-slate-700 rounded-md pl-10 pr-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-odoo"
-                        />
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button className="text-slate-400 hover:text-white relative">
-                            <Icon name="Bell" size={20} />
-                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                        </button>
-                        <button className="text-slate-400 hover:text-white">
-                            <Icon name="HelpCircle" size={20} />
-                        </button>
-                    </div>
-                </div>
-            </header>
-        );
-
-        const StatCard = ({ label, value, trend, icon, color }) => (
-            <div className="glass p-6 rounded-xl">
-                <div className="flex justify-between items-start mb-4">
-                    <div className={`p-3 rounded-lg ${color}`}>
-                        <Icon name={icon} size={24} className="text-white" />
-                    </div>
-                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${trend > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {trend > 0 ? '+' : ''}{trend}%
-                    </span>
-                </div>
-                <h3 className="text-slate-400 text-sm mb-1">{label}</h3>
-                <p className="text-3xl font-bold">{value}</p>
+                {children}
             </div>
         );
 
+        // --- Mock Data ---
+        const INITIAL_STOCK = [
+            { id: 1, sku: 'GS1-WGT-99', name: 'Industrial Motor v2', lot: 'LOT-2024-A', exp: '2028-12-01', physical: 45, atp: 42, zone: 'A-12-04', weight: '12.5kg' },
+            { id: 2, sku: 'GS1-LBL-42', name: 'Precision Sensor X', lot: 'LOT-2024-B', exp: '2026-05-15', physical: 120, atp: 85, zone: 'B-04-01', weight: '0.2kg' },
+            { id: 3, sku: 'GS1-CB-001', name: 'Alloy Control Box', lot: 'LOT-2023-Z', exp: '2030-01-10', physical: 12, atp: 12, zone: 'C-02-11', weight: '4.8kg' },
+            { id: 4, sku: 'GS1-WGT-10', name: 'Reinforced Cable 10m', lot: 'LOT-2024-D', exp: 'N/A', physical: 300, atp: 290, zone: 'A-01-09', weight: '2.5kg' },
+        ];
+
+        // --- Pages ---
         const Dashboard = () => (
-            <div className="p-8 space-y-8 animate-in fade-in duration-500">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <StatCard label="Physical On-Hand" value="1,429" trend={12} icon="Box" color="bg-indigo-600" />
-                    <StatCard label="Available to Promise" value="1,210" trend={-4} icon="Truck" color="bg-odoo" />
-                    <StatCard label="Low Stock Items" value="18" trend={22} icon="AlertTriangle" color="bg-amber-600" />
-                    <StatCard label="Daily Scan Vol" value="4,822" trend={8} icon="Zap" color="bg-emerald-600" />
+            <div className="space-y-6 animate-slide-up">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {[
+                        { label: 'Total Physical', value: '8,432', trend: '+12%', icon: 'Package', color: 'text-blue-400' },
+                        { label: 'Available to Promise', value: '7,120', trend: '+4%', icon: 'Truck', color: 'text-purple-400' },
+                        { label: 'Active Transfers', value: '24', trend: '-2%', icon: 'ArrowRightLeft', color: 'text-emerald-400' },
+                        { label: 'Scanning Efficiency', value: '98.2%', trend: '+0.5%', icon: 'Zap', color: 'text-amber-400' },
+                    ].map((stat, i) => (
+                        <div key={i} className="glass p-5 rounded-xl border-l-4 border-l-odoo">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">{stat.label}</p>
+                                    <p className="text-2xl font-black mt-1">{stat.value}</p>
+                                </div>
+                                <Icon name={stat.icon} size={24} className={stat.color} />
+                            </div>
+                            <div className={`text-[10px] font-bold mt-3 ${stat.trend.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {stat.trend} vs last month
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 glass rounded-xl p-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold">Live Inventory Buffer</h3>
-                            <button className="text-sm text-odoo font-semibold">View Detail</button>
-                        </div>
+                    <Card title="Live Stock Buffer (ATP)" icon="Database" className="lg:col-span-2">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="border-b border-slate-800 text-slate-500 text-sm">
+                            <table className="w-full">
+                                <thead className="text-xs text-slate-500 uppercase border-b border-slate-800">
                                     <tr>
-                                        <th className="pb-4 font-medium">Product / SKU</th>
-                                        <th className="pb-4 font-medium">Zone</th>
-                                        <th className="pb-4 font-medium">Physical</th>
-                                        <th className="pb-4 font-medium">ATP</th>
-                                        <th className="pb-4 font-medium">Status</th>
+                                        <th className="px-4 py-3 text-left">SKU / Product</th>
+                                        <th className="px-4 py-3 text-left">Bin</th>
+                                        <th className="px-4 py-3 text-center">Physical</th>
+                                        <th className="px-4 py-3 text-center">ATP</th>
+                                        <th className="px-4 py-3 text-right">Action</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-sm">
+                                <tbody className="text-sm divide-y divide-slate-800/50">
                                     {INITIAL_STOCK.map(item => (
-                                        <tr key={item.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
-                                            <td className="py-4 font-medium">
-                                                <div>{item.name}</div>
-                                                <div className="text-xs text-slate-500">{item.sku}</div>
+                                        <tr key={item.id} className="hover:bg-slate-800/20 transition-colors">
+                                            <td className="px-4 py-4">
+                                                <div className="font-bold">{item.name}</div>
+                                                <div className="text-[10px] font-mono text-slate-500">{item.sku}</div>
                                             </td>
-                                            <td className="py-4 font-mono text-slate-400">{item.zone}</td>
-                                            <td className="py-4">{item.physical}</td>
-                                            <td className="py-4">{item.atp}</td>
-                                            <td className="py-4">
-                                                <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold ${item.atp < 10 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                                                    {item.atp < 10 ? 'Critical' : 'Healthy'}
+                                            <td className="px-4 py-4 text-xs font-mono">{item.zone}</td>
+                                            <td className="px-4 py-4 text-center font-bold">{item.physical}</td>
+                                            <td className="px-4 py-4 text-center">
+                                                <span className={`px-2 py-1 rounded text-[10px] font-bold ${item.atp < 20 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                                    {item.atp}
                                                 </span>
+                                            </td>
+                                            <td className="px-4 py-4 text-right">
+                                                <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors"><Icon name="ExternalLink" size={14} /></button>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
-                    </div>
+                    </Card>
 
-                    <div className="glass rounded-xl p-6">
-                        <h3 className="text-xl font-bold mb-6">Real-time Routing</h3>
-                        <div className="space-y-6">
+                    <Card title="IWT Routing Logic" icon="Route">
+                        <div className="space-y-4">
                             {[
-                                { from: 'WH-East', to: 'WH-Central', items: 250, status: 'In Transit' },
-                                { from: 'QC-Zone', to: 'Main Shelf', items: 12, status: 'Verifying' },
-                                { from: 'Supplier A', to: 'Dock-01', items: 85, status: 'Arriving' },
+                                { route: 'WH-East → WH-Central', type: 'Pull', status: 'Active', items: 14 },
+                                { route: 'Supplier → QC-Zone', type: 'Push', status: 'Pending', items: 52 },
+                                { route: 'WH-Main → Scrap', type: 'Manual', status: 'Paused', items: 3 },
                             ].map((route, i) => (
-                                <div key={i} className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/50 border border-slate-800">
-                                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
-                                        <Icon name="Navigation" size={18} className="text-odoo" />
+                                <div key={i} className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl relative overflow-hidden group">
+                                    <div className="absolute right-0 top-0 h-full w-1 bg-odoo opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-bold text-slate-200">{route.route}</span>
+                                        <span className="text-[10px] uppercase font-black text-odoo">{route.status}</span>
                                     </div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between text-xs text-slate-400 mb-1">
-                                            <span>{route.from}</span>
-                                            <Icon name="ArrowRight" size={12} />
-                                            <span>{route.to}</span>
+                                    <div className="flex justify-between items-end">
+                                        <div className="flex gap-2">
+                                            <span className="px-2 py-0.5 bg-slate-800 rounded text-[10px] text-slate-400 uppercase">{route.type}</span>
                                         </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-bold text-sm">{route.items} Units</span>
-                                            <span className="text-[10px] text-blue-400 uppercase tracking-widest">{route.status}</span>
-                                        </div>
+                                        <span className="text-xs text-slate-500">{route.items} Units Moving</span>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
+                        <button className="w-full mt-6 py-3 bg-slate-800 rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors">Configure Routing</button>
+                    </Card>
                 </div>
             </div>
         );
 
         const BarcodeScannerInterface = () => {
-            const [scannedItems, setScannedItems] = useState([]);
             const [isScanning, setIsScanning] = useState(false);
-            const [manualCode, setManualCode] = useState("");
-            
-            const parseGS1 = (code) => {
-                // Simplified GS1-128 Parser Simulation
-                // (01) SKUID (10) LOT (17) EXP
-                const regex = /\(01\)(\w+)\(10\)(\w+)\(17\)(\w+)/;
-                const match = code.match(regex);
-                if (match) {
-                    return { sku: match[1], lot: match[2], exp: match[3], raw: code };
-                }
-                return { sku: code, lot: 'N/A', exp: 'N/A', raw: code };
+            const [scans, setScans] = useState([]);
+            const [error, setError] = useState(null);
+
+            const playAudio = (type) => {
+                const synth = window.speechSynthesis;
+                const utterance = new SpeechSynthesisUtterance(type === 'success' ? 'Item scanned' : 'Scan error');
+                utterance.pitch = type === 'success' ? 1.2 : 0.8;
+                utterance.rate = 1.5;
+                synth.speak(utterance);
             };
 
-            const triggerVoiceFeedback = (msg) => {
-                const speech = new SpeechSynthesisUtterance(msg);
-                speech.rate = 1.2;
-                window.speechSynthesis.speak(speech);
-            };
-
-            const handleScan = () => {
+            const simulateScan = () => {
                 setIsScanning(true);
+                setError(null);
                 setTimeout(() => {
-                    const codes = ["(01)PRO-100(10)LOT-X9(17)261231", "(01)PRO-330(10)LOT-A2(17)250520"];
-                    const randomCode = codes[Math.floor(Math.random() * codes.length)];
-                    const parsed = parseGS1(randomCode);
-                    setScannedItems(prev => [parsed, ...prev]);
-                    triggerVoiceFeedback(`Scanned ${parsed.sku}`);
+                    const success = Math.random() > 0.15;
+                    if (success) {
+                        const newItem = {
+                            id: Date.now(),
+                            raw: `(01)95012345678903(10)LOT123(17)261231(30)25`,
+                            sku: `GS1-MOD-${Math.floor(Math.random() * 999)}`,
+                            lot: `L-${Math.floor(Math.random() * 9999)}`,
+                            qty: Math.floor(Math.random() * 50) + 1,
+                            time: new Date().toLocaleTimeString()
+                        };
+                        setScans(prev => [newItem, ...prev]);
+                        playAudio('success');
+                    } else {
+                        setError("GS1 Parse Error: AI-17 Format Invalid");
+                        playAudio('error');
+                    }
                     setIsScanning(false);
-                }, 1500);
+                }, 1200);
             };
 
             return (
-                <div className="p-8 max-w-4xl mx-auto space-y-6">
-                    <div className="flex justify-between items-end">
-                        <div>
-                            <h2 className="text-3xl font-bold">Advanced Barcode Interface</h2>
-                            <p className="text-slate-400">GS1-128 Standard Multi-Parsing Engine</p>
-                        </div>
-                        <div className="text-right">
-                            <span className="text-xs text-slate-500 block mb-1">Session Volume</span>
-                            <span className="text-2xl font-mono font-bold text-odoo">{scannedItems.length} / 50</span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-4">
-                            <div className="scanner-viewport border-2 border-slate-700 relative">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-slide-up">
+                    <div className="space-y-6">
+                        <Card title="Hardware Scanner Viewport" icon="Camera">
+                            <div className="scanner-view border-2 border-slate-700 relative">
                                 {isScanning && <div className="scan-line" />}
                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40">
-                                    <Icon name="Camera" size={48} className="text-slate-600 mb-2" />
-                                    <span className="text-xs text-slate-500 uppercase font-bold tracking-widest">WebRTC Active</span>
+                                    <Icon name="Maximize" size={48} className="text-slate-600 mb-4" />
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Awaiting GS1-128 Data</span>
                                 </div>
-                                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center bg-black/60 p-3 rounded-lg backdrop-blur-md">
-                                    <div className="flex gap-2">
-                                        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                                        <span className="text-[10px] font-bold">Zebra Integrated</span>
-                                    </div>
-                                    <span className="text-[10px] text-slate-400">FPS: 60.0</span>
-                                </div>
-                            </div>
-                            
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={handleScan}
-                                    disabled={isScanning}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-all ${isScanning ? 'bg-slate-800' : 'bg-odoo shadow-lg shadow-purple-900/20'}`}
-                                >
-                                    <Icon name={isScanning ? 'Loader' : 'Maximize'} className={isScanning ? 'animate-spin' : ''} />
-                                    {isScanning ? 'Parsing Data...' : 'Simulate Scan'}
-                                </button>
-                            </div>
-
-                            <div className="glass p-4 rounded-xl">
-                                <label className="text-xs text-slate-500 font-bold block mb-2 uppercase">Manual Data Entry</label>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text" 
-                                        value={manualCode}
-                                        onChange={(e) => setManualCode(e.target.value)}
-                                        placeholder="(01) SKU (10) LOT..."
-                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-odoo"
-                                    />
+                                
+                                <div className="absolute bottom-6 left-6 right-6 flex gap-4">
                                     <button 
-                                        onClick={() => {
-                                            if(!manualCode) return;
-                                            setScannedItems(p => [parseGS1(manualCode), ...p]);
-                                            setManualCode("");
-                                        }}
-                                        className="bg-slate-800 hover:bg-slate-700 p-2 px-4 rounded-lg"
+                                        onClick={simulateScan}
+                                        disabled={isScanning}
+                                        className="flex-1 bg-odoo py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-xl shadow-purple-900/20"
                                     >
-                                        <Icon name="Plus" />
+                                        <Icon name={isScanning ? "Loader" : "Scan"} className={isScanning ? "animate-spin" : ""} />
+                                        {isScanning ? "Processing..." : "Trigger Scanner"}
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                            
+                            {error && (
+                                <div className="mt-4 p-4 bg-red-500/20 border border-red-500/50 rounded-xl flex gap-3 items-center text-red-400 animate-pulse">
+                                    <Icon name="AlertCircle" />
+                                    <span className="text-sm font-bold">{error}</span>
+                                </div>
+                            )}
+                        </Card>
 
-                        <div className="flex flex-col h-[500px]">
-                            <h3 className="font-bold text-slate-400 text-sm mb-4 uppercase tracking-widest">Scan History (Session)</h3>
-                            <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-hide">
-                                {scannedItems.length === 0 && (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-xl">
-                                        <Icon name="Layers" size={32} className="mb-2 opacity-20" />
-                                        <p>No scans in this session</p>
-                                    </div>
-                                )}
-                                {scannedItems.map((item, idx) => (
-                                    <div key={idx} className="glass p-4 rounded-lg border-l-4 border-l-green-500 animate-in slide-in-from-right duration-300">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="font-bold text-lg">{item.sku}</span>
-                                            <span className="text-[10px] bg-slate-800 px-2 py-1 rounded">SUCCESS</span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4 text-xs">
-                                            <div>
-                                                <span className="text-slate-500 block uppercase">Lot / Batch</span>
-                                                <span className="font-mono text-slate-300">{item.lot}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-slate-500 block uppercase">Expiry</span>
-                                                <span className="font-mono text-slate-300">{item.exp}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                        <div className="glass p-6 rounded-xl">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase mb-4 tracking-wider">Manual Input Fallback</h4>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="Enter raw barcode string..." 
+                                    className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-odoo"
+                                />
+                                <button className="px-6 py-2 bg-slate-800 rounded-lg text-sm font-bold hover:bg-slate-700">Enter</button>
                             </div>
                         </div>
                     </div>
+
+                    <Card title="Scan Audit Log (Live)" icon="ClipboardList">
+                        <div className="h-[500px] overflow-y-auto custom-scrollbar space-y-3 pr-2">
+                            {scans.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                                    <Icon name="Database" size={40} className="mb-2 opacity-20" />
+                                    <p className="text-sm">No scans in this session</p>
+                                </div>
+                            ) : scans.map(scan => (
+                                <div key={scan.id} className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 animate-in slide-in-from-right duration-300">
+                                    <div className="flex justify-between mb-2">
+                                        <span className="text-xs font-black text-odoo">{scan.sku}</span>
+                                        <span className="text-[10px] text-slate-500">{scan.time}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-[10px] uppercase text-slate-500">Lot ID</p>
+                                            <p className="text-xs font-mono">{scan.lot}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] uppercase text-slate-500">Validated Qty</p>
+                                            <p className="text-xs font-mono">{scan.qty} units</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-slate-800 text-[10px] font-mono text-slate-600 break-all">
+                                        RAW: {scan.raw}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
                 </div>
             );
         };
 
         const WarehouseHeatmap = () => {
-            const rows = ['A', 'B', 'C', 'D', 'E'];
-            const cols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            const [selected, setSelected] = useState(null);
             
-            const getColor = (row, col) => {
-                const hash = (row.charCodeAt(0) * col) % 100;
-                if (hash > 80) return 'bg-red-500';
-                if (hash > 60) return 'bg-amber-500';
-                if (hash > 30) return 'bg-emerald-500';
+            const bins = useMemo(() => {
+                return Array.from({ length: 96 }, (_, i) => ({
+                    id: `B-${i + 100}`,
+                    utilization: Math.floor(Math.random() * 100),
+                    items: Math.floor(Math.random() * 500)
+                }));
+            }, []);
+
+            const getBinColor = (util) => {
+                if (util > 90) return 'bg-red-500';
+                if (util > 70) return 'bg-amber-500';
+                if (util > 30) return 'bg-emerald-500';
                 return 'bg-slate-700';
             };
 
-            const [selectedBin, setSelectedBin] = useState(null);
-
             return (
-                <div className="p-8 space-y-6">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h2 className="text-3xl font-bold">Warehouse Density Heatmap</h2>
-                            <p className="text-slate-400">Visual mapping of bin utilization & stock velocity</p>
-                        </div>
-                        <div className="flex gap-4">
-                            {['Optimal', 'Normal', 'Full', 'Empty'].map(label => (
-                                <div key={label} className="flex items-center gap-2">
-                                    <div className={`w-3 h-3 rounded-full ${
-                                        label === 'Optimal' ? 'bg-emerald-500' :
-                                        label === 'Normal' ? 'bg-slate-700' :
-                                        label === 'Full' ? 'bg-red-500' : 'bg-slate-800'
-                                    }`}></div>
-                                    <span className="text-xs text-slate-400">{label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                        <div className="lg:col-span-3 glass p-8 rounded-2xl overflow-x-auto">
-                            <div className="inline-grid gap-3" style={{ gridTemplateColumns: `repeat(${cols.length + 1}, minmax(40px, 1fr))` }}>
-                                <div className="h-10"></div>
-                                {cols.map(c => (
-                                    <div key={c} className="text-xs font-bold text-slate-600 text-center">{c}</div>
-                                ))}
-                                
-                                {rows.map(r => (
-                                    <React.Fragment key={r}>
-                                        <div className="text-xs font-bold text-slate-600 flex items-center justify-center">{r}</div>
-                                        {cols.map(c => (
-                                            <div 
-                                                key={`${r}${c}`} 
-                                                onClick={() => setSelectedBin(`${r}${c}`)}
-                                                className={`h-12 w-12 rounded-md ${getColor(r, c)} opacity-60 hover:opacity-100 heatmap-cell shadow-inner flex items-center justify-center text-[8px] font-bold`}
-                                            >
-                                                {r}{c}
-                                            </div>
-                                        ))}
-                                    </React.Fragment>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-slide-up">
+                    <Card title="Fulfillment Center Layout" icon="Map" className="lg:col-span-3">
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex gap-4">
+                                {['Critical (>90%)', 'Full (>70%)', 'Optimized', 'Empty'].map((label, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                        <div className={`w-3 h-3 rounded-full ${i === 0 ? 'bg-red-500' : i === 1 ? 'bg-amber-500' : i === 2 ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase">{label}</span>
+                                    </div>
                                 ))}
                             </div>
+                            <div className="flex gap-2">
+                                <button className="p-2 bg-slate-800 rounded-lg text-xs">Aisle A</button>
+                                <button className="p-2 hover:bg-slate-800 rounded-lg text-xs text-slate-500">Aisle B</button>
+                            </div>
                         </div>
+                        
+                        <div className="heatmap-grid bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
+                            {bins.map(bin => (
+                                <div 
+                                    key={bin.id}
+                                    onMouseEnter={() => setSelected(bin)}
+                                    className={`bin-cell ${getBinColor(bin.utilization)} opacity-80 hover:opacity-100`}
+                                />
+                            ))}
+                        </div>
+                    </Card>
 
-                        <div className="glass p-6 rounded-2xl space-y-6">
-                            <h3 className="font-bold border-b border-slate-800 pb-4">Bin Analytics</h3>
-                            {selectedBin ? (
-                                <div className="space-y-4 animate-in fade-in zoom-in duration-200">
-                                    <div className="text-center py-8 bg-slate-900/50 rounded-xl border border-slate-800">
-                                        <span className="text-xs text-slate-500 uppercase block">Selected Location</span>
-                                        <span className="text-5xl font-black text-odoo">{selectedBin}</span>
+                    <div className="space-y-6">
+                        <Card title="Bin Intelligence" icon="Cpu">
+                            {selected ? (
+                                <div className="space-y-4 animate-in fade-in duration-200">
+                                    <div className="text-center py-6 bg-slate-900 rounded-xl border border-slate-800">
+                                        <span className="text-[10px] text-slate-500 uppercase block mb-1">Location Address</span>
+                                        <span className="text-3xl font-black text-odoo tracking-tighter">{selected.id}</span>
                                     </div>
                                     <div className="space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-slate-400">Utilization</span>
-                                            <span className="font-bold text-emerald-400">42%</span>
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-slate-400 font-bold">Volume Used</span>
+                                            <span className="font-bold">{selected.utilization}%</span>
                                         </div>
                                         <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                            <div className="bg-emerald-500 h-full w-[42%]"></div>
+                                            <div className="bg-odoo h-full" style={{ width: `${selected.utilization}%` }}></div>
                                         </div>
                                     </div>
-                                    <div className="pt-4 space-y-3">
-                                        <span className="text-xs font-bold text-slate-500 uppercase">Current Inventory</span>
-                                        <div className="p-3 bg-slate-800/40 rounded-lg text-sm">
-                                            <p className="font-bold">Zebra TC52 Scanner</p>
-                                            <p className="text-xs text-slate-500">Qty: 24 | Lot: L-9982</p>
+                                    <div className="pt-4 space-y-2">
+                                        <div className="flex justify-between py-2 border-b border-slate-800">
+                                            <span className="text-xs text-slate-500">SKU Count</span>
+                                            <span className="text-xs font-bold">14 Products</span>
+                                        </div>
+                                        <div className="flex justify-between py-2 border-b border-slate-800">
+                                            <span className="text-xs text-slate-500">Pick Velocity</span>
+                                            <span className="text-xs font-bold text-emerald-400">High</span>
+                                        </div>
+                                        <div className="flex justify-between py-2">
+                                            <span className="text-xs text-slate-500">Last Audit</span>
+                                            <span className="text-xs font-bold">2 days ago</span>
                                         </div>
                                     </div>
-                                    <button className="w-full py-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-semibold transition-colors">
-                                        Audit This Bin
-                                    </button>
+                                    <button className="w-full py-3 bg-odoo rounded-lg text-sm font-bold shadow-lg">Start Cycle Count</button>
                                 </div>
                             ) : (
-                                <div className="h-64 flex flex-col items-center justify-center text-slate-600 text-center px-4">
-                                    <Icon name="MousePointer2" size={40} className="mb-4 opacity-20" />
-                                    <p className="text-sm italic">Click a bin on the map to view detailed storage metrics</p>
+                                <div className="py-20 text-center text-slate-600">
+                                    <Icon name="MousePointer2" size={32} className="mx-auto mb-4 opacity-20" />
+                                    <p className="text-xs italic px-6">Hover over a bin to view real-time occupancy metrics</p>
                                 </div>
                             )}
-                        </div>
+                        </Card>
                     </div>
                 </div>
             );
@@ -459,237 +437,286 @@
 
         const SmartTransferWizard = () => {
             const [step, setStep] = useState(1);
+            
             return (
-                <div className="p-8 max-w-5xl mx-auto">
-                    <div className="mb-12">
-                        <div className="flex justify-between items-center mb-8">
-                            {['Route Setup', 'Item Selection', 'Validation', 'Execution'].map((label, i) => (
-                                <div key={label} className="flex flex-col items-center relative flex-1">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 ${step > i ? 'bg-odoo text-white' : step === i + 1 ? 'border-2 border-odoo text-odoo' : 'bg-slate-800 text-slate-600'}`}>
-                                        {step > i + 1 ? <Icon name="Check" size={20} /> : i + 1}
-                                    </div>
-                                    <span className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${step === i + 1 ? 'text-white' : 'text-slate-500'}`}>{label}</span>
-                                    {i < 3 && <div className={`absolute top-5 left-1/2 w-full h-[2px] ${step > i + 1 ? 'bg-odoo' : 'bg-slate-800'}`}></div>}
+                <div className="max-w-4xl mx-auto animate-slide-up">
+                    <div className="flex justify-between items-center mb-10 px-10">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="flex flex-col items-center relative flex-1">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 transition-all ${step >= i ? 'bg-odoo shadow-lg shadow-purple-900/40' : 'bg-slate-800 text-slate-600'}`}>
+                                    {step > i ? <Icon name="Check" size={18} /> : i}
                                 </div>
-                            ))}
-                        </div>
+                                <span className={`text-[10px] mt-2 font-black uppercase tracking-widest ${step >= i ? 'text-slate-100' : 'text-slate-600'}`}>
+                                    {i === 1 ? 'Route' : i === 2 ? 'Contents' : 'Validate'}
+                                </span>
+                                {i < 3 && <div className={`absolute top-5 left-1/2 w-full h-[2px] ${step > i ? 'bg-odoo' : 'bg-slate-800'}`}></div>}
+                            </div>
+                        ))}
                     </div>
 
-                    <div className="glass p-10 rounded-3xl min-h-[400px] flex flex-col">
-                        {step === 1 && (
-                            <div className="space-y-8 animate-in slide-in-from-bottom duration-500">
-                                <div className="text-center">
-                                    <h2 className="text-2xl font-bold mb-2">Configure Smart Route</h2>
-                                    <p className="text-slate-400">Odoo 18 Multi-Warehouse AI Routing Logic</p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-12">
+                    <Card title={step === 1 ? "Define Transfer Route" : step === 2 ? "Select Items & Batches" : "Confirm Operation"} icon="Layers">
+                        <div className="min-h-[300px] flex flex-col justify-center">
+                            {step === 1 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
                                     <div className="space-y-4">
-                                        <label className="text-xs font-bold text-slate-500 uppercase">Source Location</label>
-                                        <div className="p-6 bg-slate-900 border-2 border-slate-800 rounded-2xl hover:border-odoo cursor-pointer transition-all">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-lg flex items-center justify-center">
-                                                    <Icon name="Warehouse" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-lg">WH/Main/Aisle-A</p>
-                                                    <p className="text-xs text-slate-500">Primary Fulfillment Center</p>
-                                                </div>
-                                            </div>
+                                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Source Warehouse</label>
+                                        <div className="p-6 bg-slate-900/50 border-2 border-slate-800 rounded-2xl hover:border-odoo cursor-pointer transition-all">
+                                            <Icon name="Warehouse" size={32} className="text-odoo mb-3" />
+                                            <p className="font-bold">Main Distribution Hub</p>
+                                            <p className="text-xs text-slate-500">WH/MAIN</p>
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                        <label className="text-xs font-bold text-slate-500 uppercase">Destination</label>
-                                        <div className="p-6 bg-slate-900 border-2 border-slate-800 rounded-2xl hover:border-odoo cursor-pointer transition-all">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-lg flex items-center justify-center">
-                                                    <Icon name="ExternalLink" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-lg">WH/East/Transit</p>
-                                                    <p className="text-xs text-slate-500">Cross-Docking Point</p>
-                                                </div>
-                                            </div>
+                                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Target Node</label>
+                                        <div className="p-6 bg-slate-900/50 border-2 border-slate-800 rounded-2xl hover:border-odoo cursor-pointer transition-all">
+                                            <Icon name="Navigation" size={32} className="text-amber-400 mb-3" />
+                                            <p className="font-bold">East Regional Center</p>
+                                            <p className="text-xs text-slate-500">WH/EAST/STOCKS</p>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="p-4 bg-indigo-900/10 border border-indigo-500/30 rounded-xl flex gap-4 items-center">
-                                    <Icon name="Info" size={20} className="text-indigo-400" />
-                                    <p className="text-xs text-indigo-300">Auto-trigger Pull Rules detected. This transfer will satisfy 12 pending Backorders at WH-East.</p>
-                                </div>
-                            </div>
-                        )}
+                            )}
 
-                        {step === 2 && (
-                            <div className="space-y-6 animate-in slide-in-from-right duration-400">
-                                <h3 className="text-xl font-bold">Select Items for Move</h3>
-                                <div className="space-y-3">
-                                    {INITIAL_STOCK.map(item => (
-                                        <div key={item.id} className="flex items-center gap-4 p-4 glass rounded-xl">
-                                            <input type="checkbox" className="w-5 h-5 accent-odoo" />
-                                            <div className="flex-1">
-                                                <p className="font-bold">{item.name}</p>
-                                                <p className="text-xs text-slate-500">Lot: {item.lot} | Stock: {item.physical}</p>
+                            {step === 2 && (
+                                <div className="space-y-3 py-4">
+                                    {INITIAL_STOCK.slice(0, 3).map(item => (
+                                        <div key={item.id} className="flex items-center gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-xl">
+                                            <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center">
+                                                <Icon name="Box" size={20} className="text-slate-500" />
                                             </div>
-                                            <div className="w-24">
-                                                <input type="number" defaultValue="1" className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm" />
+                                            <div className="flex-1">
+                                                <p className="text-sm font-bold">{item.name}</p>
+                                                <p className="text-[10px] text-slate-500">LOT: {item.lot} | Max Available: {item.atp}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input type="number" defaultValue="1" className="w-20 bg-slate-800 border-none rounded-lg px-3 py-1 text-sm text-center" />
+                                                <button className="text-red-400 p-2"><Icon name="Trash2" size={16} /></button>
                                             </div>
                                         </div>
                                     ))}
+                                    <button className="w-full py-4 border-2 border-dashed border-slate-800 rounded-xl text-slate-500 hover:text-odoo hover:border-odoo transition-all text-sm font-bold flex items-center justify-center gap-2">
+                                        <Icon name="Plus" size={16} /> Add Product
+                                    </button>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        <div className="mt-auto pt-10 flex justify-between">
+                            {step === 3 && (
+                                <div className="text-center space-y-6 py-8">
+                                    <div className="w-20 h-20 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                        <Icon name="CheckCircle" size={40} />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-2xl font-black mb-2">Ready for Picking</h4>
+                                        <p className="text-slate-400 text-sm max-w-sm mx-auto">This transfer follows Route R-102 (Optimized). 3 items selected for movement to East Regional Center.</p>
+                                    </div>
+                                    <div className="p-4 bg-slate-900 rounded-xl max-w-xs mx-auto text-left border border-slate-800">
+                                        <div className="flex justify-between text-xs mb-2">
+                                            <span className="text-slate-500">Validation Status</span>
+                                            <span className="text-emerald-400 font-bold uppercase">Passed</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-slate-500">Trigger Rule</span>
+                                            <span className="text-slate-200">Replenishment P01</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-between mt-10 pt-6 border-t border-slate-800">
                             <button 
                                 onClick={() => setStep(s => Math.max(1, s - 1))}
-                                className={`px-8 py-3 rounded-lg font-bold border border-slate-700 hover:bg-slate-800 transition-all ${step === 1 ? 'invisible' : ''}`}
+                                className={`px-8 py-3 rounded-xl font-bold transition-all ${step === 1 ? 'opacity-0 pointer-events-none' : 'bg-slate-800 hover:bg-slate-700'}`}
                             >
-                                Previous
+                                Back
                             </button>
                             <button 
-                                onClick={() => step < 4 ? setStep(s => s + 1) : null}
-                                className="px-10 py-3 rounded-lg font-bold bg-odoo text-white hover:opacity-90 transition-all flex items-center gap-2"
+                                onClick={() => step < 3 ? setStep(s => s + 1) : alert('Transfer Initiated in Odoo')}
+                                className="px-10 py-3 rounded-xl font-bold bg-odoo hover:opacity-90 flex items-center gap-2 shadow-lg"
                             >
-                                {step === 4 ? 'Confirm & Process' : 'Continue'}
+                                {step === 3 ? 'Confirm & Execute' : 'Next Step'}
                                 <Icon name="ArrowRight" size={18} />
                             </button>
                         </div>
-                    </div>
+                    </Card>
                 </div>
             );
         };
 
-        const AuditLogs = () => {
-            const [logs] = useState([
-                { id: 1029, user: 'Marc André', action: 'Barcode Scan', details: 'PRO-100 (Success)', status: 'Verified', time: '2 mins ago', geo: '48.8566° N, 2.3522° E' },
-                { id: 1028, user: 'System', action: 'IWT Rule Trigger', details: 'WH-East Reorder', status: 'Automated', time: '14 mins ago', geo: 'System Server' },
-                { id: 1027, user: 'Sarah J.', action: 'Adjustment', details: 'Bin A2 Scrap (-2)', status: 'Approved', time: '1 hr ago', geo: '48.8566° N, 2.3522° E' },
-                { id: 1026, user: 'Marc André', action: 'Barcode Scan', details: 'Unknown Tag (Error)', status: 'Flagged', time: '3 hrs ago', geo: '48.8566° N, 2.3522° E' },
-                { id: 1025, user: 'Sarah J.', action: 'Zone Definition', details: 'Added Zone D-4', status: 'System', time: '5 hrs ago', geo: 'Office Node' },
-            ]);
-
-            return (
-                <div className="p-8">
-                    <div className="flex justify-between items-center mb-8">
-                        <div>
-                            <h2 className="text-3xl font-bold">Immutable Audit Trail</h2>
-                            <p className="text-slate-400">Security-first logging for financial compliance & traceability</p>
-                        </div>
-                        <button className="flex items-center gap-2 px-4 py-2 glass rounded-lg text-sm hover:bg-slate-800">
-                            <Icon name="Download" size={16} />
-                            Export CSV
-                        </button>
-                    </div>
-
-                    <div className="glass rounded-2xl overflow-hidden">
+        const AuditLogs = () => (
+            <div className="space-y-6 animate-slide-up">
+                <Card title="Traceability & Security Logs" icon="ShieldCheck">
+                    <div className="glass rounded-xl overflow-hidden">
                         <table className="w-full text-left">
-                            <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-widest border-b border-slate-800">
+                            <thead className="bg-slate-900 text-slate-500 text-[10px] uppercase font-black tracking-widest border-b border-slate-800">
                                 <tr>
-                                    <th className="px-6 py-4">Event ID</th>
-                                    <th className="px-6 py-4">User / Actor</th>
-                                    <th className="px-6 py-4">Action Type</th>
-                                    <th className="px-6 py-4">Event Details</th>
-                                    <th className="px-6 py-4">Source Metadata</th>
-                                    <th className="px-6 py-4 text-right">Timestamp</th>
+                                    <th className="px-6 py-4">Ref ID</th>
+                                    <th className="px-6 py-4">User</th>
+                                    <th className="px-6 py-4">Action</th>
+                                    <th className="px-6 py-4">Metadata</th>
+                                    <th className="px-6 py-4">Status</th>
+                                    <th className="px-6 py-4 text-right">Geolocation</th>
                                 </tr>
                             </thead>
-                            <tbody className="text-sm divide-y divide-slate-800">
-                                {logs.map(log => (
+                            <tbody className="text-xs divide-y divide-slate-800">
+                                {[
+                                    { id: 'LOG-8821', user: 'Marc André', action: 'Barcode Scan', meta: 'PRO-100 (Success)', status: 'Verified', geo: 'Zone A-04' },
+                                    { id: 'LOG-8820', user: 'System AI', action: 'Stock Buffer Rule', meta: 'Auto-Trigger WH-East', status: 'Automated', geo: 'Server Node' },
+                                    { id: 'LOG-8819', user: 'Sarah J.', action: 'Manual Adjustment', meta: 'Scrapped -2 Units', status: 'Approved', geo: 'Zone C-12' },
+                                    { id: 'LOG-8818', user: 'Marc André', action: 'Zone Creation', meta: 'Added Bin D-102', status: 'System', geo: 'Main Floor' },
+                                    { id: 'LOG-8817', user: 'System AI', action: 'IWT Routing', meta: 'WH-East Reordered', status: 'Automated', geo: 'Global' },
+                                ].map(log => (
                                     <tr key={log.id} className="hover:bg-slate-800/10 transition-colors group">
                                         <td className="px-6 py-4 font-mono text-odoo font-bold">#{log.id}</td>
+                                        <td className="px-6 py-4 font-bold">{log.user}</td>
+                                        <td className="px-6 py-4 text-slate-400">{log.action}</td>
+                                        <td className="px-6 py-4 font-mono text-slate-500">{log.meta}</td>
                                         <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 bg-slate-800 rounded-full flex items-center justify-center text-[10px]">
-                                                    {log.user.split(' ').map(n => n[0]).join('')}
-                                                </div>
-                                                {log.user}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="font-medium text-slate-200">{log.action}</span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.status === 'Verified' ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400'}`}>
-                                                {log.details}
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${log.status === 'Verified' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                                                {log.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 font-mono text-[10px] text-slate-500">{log.geo}</td>
-                                        <td className="px-6 py-4 text-right text-slate-500 group-hover:text-slate-300">{log.time}</td>
+                                        <td className="px-6 py-4 text-right text-slate-600 italic">{log.geo}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
-                </div>
-            );
-        };
+                </Card>
+            </div>
+        );
 
         const Settings = () => (
-            <div className="p-8 max-w-3xl space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                <h2 className="text-3xl font-bold">System Configuration</h2>
-                
-                <div className="space-y-6">
-                    <section className="glass p-6 rounded-2xl">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                            <Icon name="Smartphone" className="text-odoo" />
-                            Hardware Integration
-                        </h3>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center p-3 hover:bg-slate-800/30 rounded-lg">
-                                <div>
-                                    <p className="font-medium text-sm">Zebra DataWedge Support</p>
-                                    <p className="text-xs text-slate-500">Native scanner wedge hooks for high-speed parsing</p>
+            <div className="max-w-3xl space-y-8 animate-slide-up">
+                <div className="grid grid-cols-1 gap-6">
+                    <Card title="Hardware Configuration" icon="Smartphone">
+                        <div className="space-y-6">
+                            {[
+                                { title: 'Zebra DataWedge Hook', desc: 'Auto-detect hardware scanner events', active: true },
+                                { title: 'GS1-128 Smart Parsing', desc: 'Identify SKU, Lot, and Expiry in single scan', active: true },
+                                { title: 'Haptic Feedback', desc: 'Vibrate on successful scan validation', active: false },
+                                { title: 'Audible Voice Alerts', desc: 'Use Text-to-Speech for scan confirmation', active: true },
+                            ].map((opt, i) => (
+                                <div key={i} className="flex justify-between items-center py-4 border-b border-slate-800 last:border-0">
+                                    <div>
+                                        <p className="text-sm font-bold">{opt.title}</p>
+                                        <p className="text-xs text-slate-500">{opt.desc}</p>
+                                    </div>
+                                    <div className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${opt.active ? 'bg-odoo' : 'bg-slate-700'}`}>
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${opt.active ? 'right-1' : 'left-1'}`}></div>
+                                    </div>
                                 </div>
-                                <div className="w-12 h-6 bg-odoo rounded-full relative"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div>
-                            </div>
-                            <div className="flex justify-between items-center p-3 hover:bg-slate-800/30 rounded-lg">
-                                <div>
-                                    <p className="font-medium text-sm">Voice Alerts (TTS)</p>
-                                    <p className="text-xs text-slate-500">Audible confirmation for clerks during batch picking</p>
-                                </div>
-                                <div className="w-12 h-6 bg-odoo rounded-full relative"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div>
-                            </div>
+                            ))}
                         </div>
-                    </section>
+                    </Card>
 
-                    <section className="glass p-6 rounded-2xl">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-amber-400">
-                            <Icon name="Database" />
-                            Offline Management
-                        </h3>
-                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4">
-                            <p className="text-xs text-amber-200">System is currently configured to store up to 1,000 scans locally when Wi-Fi connection is lost.</p>
+                    <Card title="Offline Synchronization" icon="WifiOff">
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-6 flex gap-4 items-center">
+                            <Icon name="Info" className="text-amber-500" />
+                            <p className="text-xs text-amber-200 font-medium">System will locally cache up to 5,000 scans during connection loss and auto-sync on heartbeat.</p>
                         </div>
-                        <button className="w-full py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm font-bold">Clear Local Cache</button>
-                    </section>
+                        <button className="w-full py-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-bold transition-all border border-slate-700">Force Cache Sync</button>
+                    </Card>
                 </div>
             </div>
         );
 
-        // --- Main App Controller ---
+        // --- Layout ---
+        const Sidebar = ({ active, setTab }) => {
+            const items = [
+                { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
+                { id: 'scanner', label: 'GS1 Scanner', icon: 'ScanBarcode' },
+                { id: 'heatmap', label: 'Warehouse Map', icon: 'Map' },
+                { id: 'transfer', label: 'Smart Transfer', icon: 'ArrowRightLeft' },
+                { id: 'audit', label: 'Audit Logs', icon: 'History' },
+                { id: 'settings', label: 'Settings', icon: 'Settings' },
+            ];
 
+            return (
+                <div className="w-64 glass h-screen fixed left-0 top-0 flex flex-col border-r border-slate-800">
+                    <div className="p-8 flex items-center gap-3">
+                        <div className="w-10 h-10 bg-odoo rounded-xl flex items-center justify-center shadow-lg shadow-purple-900/40">
+                            <Icon name="Package" size={24} className="text-white" />
+                        </div>
+                        <h1 className="text-xl font-black tracking-tighter">ODOO <span className="text-odoo font-light">18</span></h1>
+                    </div>
+                    
+                    <nav className="flex-1 px-4 py-2 space-y-2">
+                        {items.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => setTab(item.id)}
+                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-lg transition-all text-sm font-bold ${active === item.id ? 'sidebar-active shadow-lg shadow-purple-900/10' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                            >
+                                <Icon name={item.icon} size={20} />
+                                {item.label}
+                            </button>
+                        ))}
+                    </nav>
+
+                    <div className="p-6 mt-auto">
+                        <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center font-black text-sm">MA</div>
+                            <div className="overflow-hidden">
+                                <p className="text-xs font-bold truncate">Marc André</p>
+                                <p className="text-[10px] text-slate-500 uppercase font-black">Admin</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TopNavbar = ({ active }) => (
+            <header className="h-20 glass flex items-center justify-between px-10 sticky top-0 z-50 border-b border-slate-800">
+                <div className="flex items-center gap-4">
+                    <h2 className="text-lg font-bold capitalize tracking-tight">{active.replace('-', ' ')}</h2>
+                    <div className="h-4 w-px bg-slate-800"></div>
+                    <p className="text-xs text-slate-500 font-medium">Warehouse East (WH/E01)</p>
+                </div>
+                
+                <div className="flex items-center gap-6">
+                    <div className="relative group">
+                        <Icon name="Search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Quick SKU Search..." 
+                            className="bg-slate-900 border border-slate-800 rounded-full pl-10 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-odoo w-64 group-hover:border-slate-600 transition-all"
+                        />
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-800 relative text-slate-400">
+                            <Icon name="Bell" size={20} />
+                            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-900"></span>
+                        </button>
+                        <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-800 text-slate-400">
+                            <Icon name="HelpCircle" size={20} />
+                        </button>
+                    </div>
+                </div>
+            </header>
+        );
+
+        // --- Root App ---
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
 
-            const renderContent = () => {
-                switch(activeTab) {
-                    case 'dashboard': return <Dashboard />;
-                    case 'scanner': return <BarcodeScannerInterface />;
-                    case 'heatmap': return <WarehouseHeatmap />;
-                    case 'transfer': return <SmartTransferWizard />;
-                    case 'logs': return <AuditLogs />;
-                    case 'settings': return <Settings />;
-                    default: return <Dashboard />;
-                }
+            const content = {
+                dashboard: <Dashboard />,
+                scanner: <BarcodeScannerInterface />,
+                heatmap: <WarehouseHeatmap />,
+                transfer: <SmartTransferWizard />,
+                audit: <AuditLogs />,
+                settings: <Settings />
             };
 
             return (
-                <div className="flex min-h-screen">
-                    <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-                    <main className="flex-1 ml-64 min-h-screen overflow-y-auto">
-                        <TopNav title={activeTab} />
-                        <div className="pb-20">
-                            {renderContent()}
+                <div className="flex">
+                    <Sidebar active={activeTab} setTab={setActiveTab} />
+                    <main className="flex-1 ml-64 min-h-screen">
+                        <TopNavbar active={activeTab} />
+                        <div className="p-10 max-w-[1400px] mx-auto pb-24">
+                            {content[activeTab]}
                         </div>
                     </main>
                 </div>
@@ -699,10 +726,8 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
 
-        // Initialize Lucide Icons after React Render
-        setTimeout(() => {
-            if(window.lucide) window.lucide.createIcons();
-        }, 100);
+        // Initialize Icons
+        setTimeout(() => lucide.createIcons(), 200);
     </script>
 </body>
 </html>
