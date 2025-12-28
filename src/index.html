@@ -3,235 +3,354 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>demo-odoo-module | Advanced Inventory Tracker</title>
+    <title>demo-odoo-module - Advanced Inventory Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/lucide-react@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
         body { 
             background-color: #020617; 
             color: #f8fafc; 
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', sans-serif; 
             margin: 0;
             overflow: hidden;
         }
-
-        .glass { 
-            background: rgba(15, 23, 42, 0.6); 
-            backdrop-filter: blur(12px); 
-            border: 1px solid rgba(255, 255, 255, 0.08); 
-        }
-
+        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
         .odoo-purple { color: #714B67; }
-        .bg-odoo-purple { background-color: #714B67; }
-        .border-odoo-purple { border-color: #714B67; }
-        
-        .scanner-line {
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #714B67, transparent);
-            position: absolute;
-            width: 100%;
-            top: 50%;
-            animation: scan 2s infinite ease-in-out;
-        }
-
-        @keyframes scan {
-            0% { top: 10%; opacity: 0; }
-            50% { opacity: 1; }
-            100% { top: 90%; opacity: 0; }
-        }
-
-        .heatmap-cell {
-            transition: all 0.3s ease;
-        }
-        .heatmap-cell:hover {
-            transform: scale(1.1);
-            z-index: 10;
-            box-shadow: 0 0 15px rgba(113, 75, 103, 0.5);
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 10px;
-        }
-
-        .status-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
-        }
+        .bg-odoo { background-color: #714B67; }
+        .bg-odoo:hover { background-color: #5a3c52; }
+        .sidebar-item-active { background: rgba(113, 75, 103, 0.2); border-left: 4px solid #714B67; }
+        .scanner-viewport { position: relative; overflow: hidden; background: #000; height: 300px; border-radius: 8px; }
+        .scan-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #28A745; box-shadow: 0 0 15px #28A745; animation: scan 2s linear infinite; }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .heatmap-cell { transition: all 0.3s ease; cursor: pointer; }
+        .heatmap-cell:hover { transform: scale(1.1); z-index: 10; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-        const { 
-            LayoutDashboard, Barcode, Warehouse, ArrowLeftRight, 
-            History, Settings, Bell, Search, User, 
-            TrendingUp, Package, AlertTriangle, CheckCircle2,
-            Map, ChevronRight, Filter, Download, Plus, 
-            Camera, Volume2, Maximize, X, Activity, Box
-        } = lucideReact;
 
-        // --- Mock Data ---
-        const MOCK_WAREHOUSES = [
-            { id: 1, name: 'Main Hub - Brussels', zones: 12, capacity: 85, status: 'Active' },
-            { id: 2, name: 'Regional - Antwerp', zones: 4, capacity: 42, status: 'Active' },
-            { id: 3, name: 'Transit Node - Liege', zones: 2, capacity: 15, status: 'Maintenance' }
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+        
+        // --- Icons Implementation ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const LucideIcon = lucide[name.charAt(0).toUpperCase() + name.slice(1)];
+            return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
+        };
+
+        // --- Mock Data & Constants ---
+        const INITIAL_STOCK = [
+            { id: 1, sku: 'PRO-100', name: 'Zebra TC52 Scanner', lot: 'L-9982', exp: '2026-12-31', physical: 42, atp: 38, zone: 'A1-04' },
+            { id: 2, sku: 'PRO-205', name: 'Industrial Conveyor Belt', lot: 'L-1102', exp: '2030-01-15', physical: 12, atp: 12, zone: 'B2-11' },
+            { id: 3, sku: 'PRO-330', name: 'Rugged Tablet Case', lot: 'L-4451', exp: '2025-06-20', physical: 156, atp: 140, zone: 'A2-02' },
+            { id: 4, sku: 'PRO-882', name: 'Thermal Labels (Roll)', lot: 'L-0021', exp: '2027-04-10', physical: 8, atp: 5, zone: 'C1-09' },
         ];
 
-        const MOCK_LOGS = [
-            { id: 'LOG-8821', user: 'Marc Demo', sku: 'LAP-M2-001', barcode: '(01)054123456789(10)LOT42(17)261231', status: 'success', time: '10:42 AM' },
-            { id: 'LOG-8822', user: 'Marc Demo', sku: 'IPH-15-PRO', barcode: '(01)054123456790(10)LOT43(17)261231', status: 'success', time: '10:45 AM' },
-            { id: 'LOG-8823', user: 'Admin', sku: 'MOU-LOG-BT', barcode: 'ERR_INVALID_GS1', status: 'error', time: '11:02 AM' },
-            { id: 'LOG-8824', user: 'Marc Demo', sku: 'CAB-USB-C', barcode: '(01)054123456795(10)LOT11(17)270101', status: 'success', time: '11:15 AM' }
+        const WAREHOUSE_ZONES = [
+            { id: 'Z1', name: 'Main Aisle A', occupancy: 85 },
+            { id: 'Z2', name: 'Secondary B', occupancy: 42 },
+            { id: 'Z3', name: 'Cold Storage C', occupancy: 12 },
+            { id: 'Z4', name: 'Bulk D', occupancy: 95 },
         ];
 
         // --- Components ---
 
-        const StatCard = ({ title, value, icon: Icon, trend, color }) => (
-            <div className="glass p-5 rounded-xl flex items-start justify-between">
-                <div>
-                    <p className="text-slate-400 text-sm font-medium">{title}</p>
-                    <h3 className="text-2xl font-bold mt-1">{value}</h3>
-                    <div className={`flex items-center mt-2 text-xs ${trend > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        <TrendingUp size={12} className="mr-1" />
-                        <span>{trend > 0 ? '+' : ''}{trend}% from last week</span>
+        const Sidebar = ({ activeTab, setActiveTab }) => {
+            const menuItems = [
+                { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard' },
+                { id: 'scanner', icon: 'ScanBarcode', label: 'GS1 Scanner' },
+                { id: 'heatmap', icon: 'Map', label: 'Warehouse Map' },
+                { id: 'transfer', icon: 'ArrowRightLeft', label: 'Smart Transfer' },
+                { id: 'logs', icon: 'ClipboardList', label: 'Audit Logs' },
+                { id: 'settings', icon: 'Settings', label: 'Configuration' },
+            ];
+
+            return (
+                <div className="w-64 glass h-screen flex flex-col fixed left-0 top-0">
+                    <div className="p-6 flex items-center gap-3">
+                        <div className="w-10 h-10 bg-odoo flex items-center justify-center rounded-lg shadow-lg">
+                            <Icon name="Package" size={24} />
+                        </div>
+                        <h1 className="font-bold text-xl tracking-tight">Odoo <span className="text-purple-400">18</span></h1>
+                    </div>
+                    
+                    <nav className="flex-1 mt-4">
+                        {menuItems.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => setActiveTab(item.id)}
+                                className={`w-full flex items-center gap-4 px-6 py-4 transition-all ${activeTab === item.id ? 'sidebar-item-active text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            >
+                                <Icon name={item.icon} size={20} />
+                                <span className="font-medium">{item.label}</span>
+                            </button>
+                        ))}
+                    </nav>
+
+                    <div className="p-6 border-t border-slate-800">
+                        <div className="flex items-center gap-3 p-2 bg-slate-900 rounded-lg">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center font-bold text-xs">MA</div>
+                            <div className="overflow-hidden">
+                                <p className="text-sm font-semibold truncate">Marc André</p>
+                                <p className="text-[10px] text-slate-500 uppercase">Warehouse Director</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className={`p-3 rounded-lg bg-opacity-10 ${color}`}>
-                    <Icon className={color.replace('bg-', 'text-')} size={24} />
+            );
+        };
+
+        const TopNav = ({ title }) => (
+            <header className="h-16 glass sticky top-0 z-40 flex items-center justify-between px-8 ml-64">
+                <h2 className="text-lg font-semibold capitalize">{title.replace('-', ' ')}</h2>
+                <div className="flex items-center gap-6">
+                    <div className="relative">
+                        <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input 
+                            type="text" 
+                            placeholder="Search SKU, Lot, or Bin..." 
+                            className="bg-slate-900/50 border border-slate-700 rounded-md pl-10 pr-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-odoo"
+                        />
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <button className="text-slate-400 hover:text-white relative">
+                            <Icon name="Bell" size={20} />
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                        </button>
+                        <button className="text-slate-400 hover:text-white">
+                            <Icon name="HelpCircle" size={20} />
+                        </button>
+                    </div>
+                </div>
+            </header>
+        );
+
+        const StatCard = ({ label, value, trend, icon, color }) => (
+            <div className="glass p-6 rounded-xl">
+                <div className="flex justify-between items-start mb-4">
+                    <div className={`p-3 rounded-lg ${color}`}>
+                        <Icon name={icon} size={24} className="text-white" />
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${trend > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {trend > 0 ? '+' : ''}{trend}%
+                    </span>
+                </div>
+                <h3 className="text-slate-400 text-sm mb-1">{label}</h3>
+                <p className="text-3xl font-bold">{value}</p>
+            </div>
+        );
+
+        const Dashboard = () => (
+            <div className="p-8 space-y-8 animate-in fade-in duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <StatCard label="Physical On-Hand" value="1,429" trend={12} icon="Box" color="bg-indigo-600" />
+                    <StatCard label="Available to Promise" value="1,210" trend={-4} icon="Truck" color="bg-odoo" />
+                    <StatCard label="Low Stock Items" value="18" trend={22} icon="AlertTriangle" color="bg-amber-600" />
+                    <StatCard label="Daily Scan Vol" value="4,822" trend={8} icon="Zap" color="bg-emerald-600" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 glass rounded-xl p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold">Live Inventory Buffer</h3>
+                            <button className="text-sm text-odoo font-semibold">View Detail</button>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="border-b border-slate-800 text-slate-500 text-sm">
+                                    <tr>
+                                        <th className="pb-4 font-medium">Product / SKU</th>
+                                        <th className="pb-4 font-medium">Zone</th>
+                                        <th className="pb-4 font-medium">Physical</th>
+                                        <th className="pb-4 font-medium">ATP</th>
+                                        <th className="pb-4 font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-sm">
+                                    {INITIAL_STOCK.map(item => (
+                                        <tr key={item.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                                            <td className="py-4 font-medium">
+                                                <div>{item.name}</div>
+                                                <div className="text-xs text-slate-500">{item.sku}</div>
+                                            </td>
+                                            <td className="py-4 font-mono text-slate-400">{item.zone}</td>
+                                            <td className="py-4">{item.physical}</td>
+                                            <td className="py-4">{item.atp}</td>
+                                            <td className="py-4">
+                                                <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold ${item.atp < 10 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+                                                    {item.atp < 10 ? 'Critical' : 'Healthy'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="glass rounded-xl p-6">
+                        <h3 className="text-xl font-bold mb-6">Real-time Routing</h3>
+                        <div className="space-y-6">
+                            {[
+                                { from: 'WH-East', to: 'WH-Central', items: 250, status: 'In Transit' },
+                                { from: 'QC-Zone', to: 'Main Shelf', items: 12, status: 'Verifying' },
+                                { from: 'Supplier A', to: 'Dock-01', items: 85, status: 'Arriving' },
+                            ].map((route, i) => (
+                                <div key={i} className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/50 border border-slate-800">
+                                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
+                                        <Icon name="Navigation" size={18} className="text-odoo" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between text-xs text-slate-400 mb-1">
+                                            <span>{route.from}</span>
+                                            <Icon name="ArrowRight" size={12} />
+                                            <span>{route.to}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-sm">{route.items} Units</span>
+                                            <span className="text-[10px] text-blue-400 uppercase tracking-widest">{route.status}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
         );
 
-        const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
-            <button 
-                onClick={onClick}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    active ? 'bg-odoo-purple text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-            >
-                <Icon size={20} />
-                <span className="font-medium">{label}</span>
-            </button>
-        );
-
         const BarcodeScannerInterface = () => {
-            const [scannedItems, setScannedItems] = useState([
-                { id: 1, name: 'MacBook Pro M2', qty: 1, target: 5 },
-                { id: 2, name: 'iPhone 15 Pro Max', qty: 3, target: 3 },
-            ]);
+            const [scannedItems, setScannedItems] = useState([]);
             const [isScanning, setIsScanning] = useState(false);
-            const [manualInput, setManualInput] = useState("");
+            const [manualCode, setManualCode] = useState("");
+            
+            const parseGS1 = (code) => {
+                // Simplified GS1-128 Parser Simulation
+                // (01) SKUID (10) LOT (17) EXP
+                const regex = /\(01\)(\w+)\(10\)(\w+)\(17\)(\w+)/;
+                const match = code.match(regex);
+                if (match) {
+                    return { sku: match[1], lot: match[2], exp: match[3], raw: code };
+                }
+                return { sku: code, lot: 'N/A', exp: 'N/A', raw: code };
+            };
 
-            const simulateScan = () => {
+            const triggerVoiceFeedback = (msg) => {
+                const speech = new SpeechSynthesisUtterance(msg);
+                speech.rate = 1.2;
+                window.speechSynthesis.speak(speech);
+            };
+
+            const handleScan = () => {
                 setIsScanning(true);
                 setTimeout(() => {
+                    const codes = ["(01)PRO-100(10)LOT-X9(17)261231", "(01)PRO-330(10)LOT-A2(17)250520"];
+                    const randomCode = codes[Math.floor(Math.random() * codes.length)];
+                    const parsed = parseGS1(randomCode);
+                    setScannedItems(prev => [parsed, ...prev]);
+                    triggerVoiceFeedback(`Scanned ${parsed.sku}`);
                     setIsScanning(false);
-                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                    audio.play().catch(() => {});
                 }, 1500);
             };
 
             return (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-2xl font-bold">Mobile Barcode Interface</h2>
-                        <div className="flex space-x-2">
-                            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-xs rounded-full border border-emerald-500/20 flex items-center">
-                                <Activity size={12} className="mr-1" /> GS1-128 Engine Active
-                            </span>
+                <div className="p-8 max-w-4xl mx-auto space-y-6">
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <h2 className="text-3xl font-bold">Advanced Barcode Interface</h2>
+                            <p className="text-slate-400">GS1-128 Standard Multi-Parsing Engine</p>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-xs text-slate-500 block mb-1">Session Volume</span>
+                            <span className="text-2xl font-mono font-bold text-odoo">{scannedItems.length} / 50</span>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="relative aspect-video glass rounded-2xl overflow-hidden flex items-center justify-center border-2 border-dashed border-slate-700">
-                                {isScanning ? (
-                                    <>
-                                        <div className="absolute inset-0 bg-slate-900/40"></div>
-                                        <div className="scanner-line"></div>
-                                        <div className="z-10 text-center">
-                                            <div className="animate-pulse mb-2">Analyzing GS1-128 String...</div>
-                                            <div className="text-xs text-slate-400 font-mono">(01)054123456789(10)LOT42(17)261231</div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <button onClick={simulateScan} className="flex flex-col items-center group">
-                                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 group-hover:bg-odoo-purple transition-colors">
-                                            <Camera className="text-white" />
-                                        </div>
-                                        <p className="text-slate-400 font-medium">Tap to start camera scanner</p>
-                                    </button>
-                                )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                            <div className="scanner-viewport border-2 border-slate-700 relative">
+                                {isScanning && <div className="scan-line" />}
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40">
+                                    <Icon name="Camera" size={48} className="text-slate-600 mb-2" />
+                                    <span className="text-xs text-slate-500 uppercase font-bold tracking-widest">WebRTC Active</span>
+                                </div>
+                                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center bg-black/60 p-3 rounded-lg backdrop-blur-md">
+                                    <div className="flex gap-2">
+                                        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                        <span className="text-[10px] font-bold">Zebra Integrated</span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-400">FPS: 60.0</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={handleScan}
+                                    disabled={isScanning}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-all ${isScanning ? 'bg-slate-800' : 'bg-odoo shadow-lg shadow-purple-900/20'}`}
+                                >
+                                    <Icon name={isScanning ? 'Loader' : 'Maximize'} className={isScanning ? 'animate-spin' : ''} />
+                                    {isScanning ? 'Parsing Data...' : 'Simulate Scan'}
+                                </button>
                             </div>
 
-                            <div className="glass p-6 rounded-2xl">
-                                <h3 className="text-lg font-semibold mb-4">Manual Fallback</h3>
-                                <div className="flex space-x-2">
+                            <div className="glass p-4 rounded-xl">
+                                <label className="text-xs text-slate-500 font-bold block mb-2 uppercase">Manual Data Entry</label>
+                                <div className="flex gap-2">
                                     <input 
                                         type="text" 
-                                        placeholder="Enter Barcode / GS1 Raw Data" 
-                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-odoo-purple outline-none"
-                                        value={manualInput}
-                                        onChange={(e) => setManualInput(e.target.value)}
+                                        value={manualCode}
+                                        onChange={(e) => setManualCode(e.target.value)}
+                                        placeholder="(01) SKU (10) LOT..."
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-odoo"
                                     />
-                                    <button onClick={simulateScan} className="bg-odoo-purple px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition-opacity">
-                                        Process
+                                    <button 
+                                        onClick={() => {
+                                            if(!manualCode) return;
+                                            setScannedItems(p => [parseGS1(manualCode), ...p]);
+                                            setManualCode("");
+                                        }}
+                                        className="bg-slate-800 hover:bg-slate-700 p-2 px-4 rounded-lg"
+                                    >
+                                        <Icon name="Plus" />
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="glass p-6 rounded-2xl flex flex-col h-full">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-semibold text-odoo-purple">Active Picking: WH/OUT/0042</h3>
-                                <Maximize size={18} className="text-slate-400 cursor-pointer" />
-                            </div>
-                            
-                            <div className="flex-1 space-y-4">
-                                {scannedItems.map(item => (
-                                    <div key={item.id} className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl">
+                        <div className="flex flex-col h-[500px]">
+                            <h3 className="font-bold text-slate-400 text-sm mb-4 uppercase tracking-widest">Scan History (Session)</h3>
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-hide">
+                                {scannedItems.length === 0 && (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-xl">
+                                        <Icon name="Layers" size={32} className="mb-2 opacity-20" />
+                                        <p>No scans in this session</p>
+                                    </div>
+                                )}
+                                {scannedItems.map((item, idx) => (
+                                    <div key={idx} className="glass p-4 rounded-lg border-l-4 border-l-green-500 animate-in slide-in-from-right duration-300">
                                         <div className="flex justify-between items-start mb-2">
-                                            <span className="font-medium">{item.name}</span>
-                                            <span className={`text-xs px-2 py-0.5 rounded-full ${item.qty === item.target ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                                {item.qty === item.target ? 'Complete' : 'Pending'}
-                                            </span>
+                                            <span className="font-bold text-lg">{item.sku}</span>
+                                            <span className="text-[10px] bg-slate-800 px-2 py-1 rounded">SUCCESS</span>
                                         </div>
-                                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                            <div 
-                                                className="bg-odoo-purple h-full transition-all duration-500" 
-                                                style={{ width: `${(item.qty / item.target) * 100}%` }}
-                                            ></div>
-                                        </div>
-                                        <div className="flex justify-between text-xs mt-2 text-slate-400 font-mono">
-                                            <span>Qty: {item.qty} / {item.target}</span>
-                                            <span>SKU: {item.id === 1 ? 'LAP-M2-001' : 'IPH-15-PRO'}</span>
+                                        <div className="grid grid-cols-2 gap-4 text-xs">
+                                            <div>
+                                                <span className="text-slate-500 block uppercase">Lot / Batch</span>
+                                                <span className="font-mono text-slate-300">{item.lot}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-500 block uppercase">Expiry</span>
+                                                <span className="font-mono text-slate-300">{item.exp}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                            
-                            <button className="mt-6 w-full py-4 bg-emerald-600 rounded-xl font-bold flex items-center justify-center space-x-2 hover:bg-emerald-500 transition-colors">
-                                <CheckCircle2 size={20} />
-                                <span>Validate Picking</span>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -239,65 +358,99 @@
         };
 
         const WarehouseHeatmap = () => {
-            const rows = 8;
-            const cols = 12;
-            const grid = Array.from({ length: rows * cols }, (_, i) => ({
-                id: i,
-                fill: Math.floor(Math.random() * 100),
-                zone: i < 36 ? 'A' : i < 72 ? 'B' : 'C'
-            }));
-
-            const getHeatColor = (fill) => {
-                if (fill > 90) return 'bg-rose-500';
-                if (fill > 70) return 'bg-amber-500';
-                if (fill > 40) return 'bg-emerald-500';
+            const rows = ['A', 'B', 'C', 'D', 'E'];
+            const cols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            
+            const getColor = (row, col) => {
+                const hash = (row.charCodeAt(0) * col) % 100;
+                if (hash > 80) return 'bg-red-500';
+                if (hash > 60) return 'bg-amber-500';
+                if (hash > 30) return 'bg-emerald-500';
                 return 'bg-slate-700';
             };
 
+            const [selectedBin, setSelectedBin] = useState(null);
+
             return (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between">
+                <div className="p-8 space-y-6">
+                    <div className="flex justify-between items-center">
                         <div>
-                            <h2 className="text-2xl font-bold">Storage Density Heatmap</h2>
-                            <p className="text-slate-400">Visual floor plan for Main Hub - Brussels</p>
+                            <h2 className="text-3xl font-bold">Warehouse Density Heatmap</h2>
+                            <p className="text-slate-400">Visual mapping of bin utilization & stock velocity</p>
                         </div>
-                        <div className="flex space-x-4 bg-slate-900 p-2 rounded-lg border border-slate-800">
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-slate-700 rounded mr-1"></div> Empty</div>
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-emerald-500 rounded mr-1"></div> Optimal</div>
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-amber-500 rounded mr-1"></div> High</div>
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-rose-500 rounded mr-1"></div> Critical</div>
+                        <div className="flex gap-4">
+                            {['Optimal', 'Normal', 'Full', 'Empty'].map(label => (
+                                <div key={label} className="flex items-center gap-2">
+                                    <div className={`w-3 h-3 rounded-full ${
+                                        label === 'Optimal' ? 'bg-emerald-500' :
+                                        label === 'Normal' ? 'bg-slate-700' :
+                                        label === 'Full' ? 'bg-red-500' : 'bg-slate-800'
+                                    }`}></div>
+                                    <span className="text-xs text-slate-400">{label}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="glass p-8 rounded-2xl overflow-auto">
-                        <div 
-                            className="grid gap-2 mx-auto" 
-                            style={{ 
-                                gridTemplateColumns: `repeat(${cols}, minmax(40px, 1fr))`,
-                                width: 'fit-content'
-                            }}
-                        >
-                            {grid.map(cell => (
-                                <div 
-                                    key={cell.id}
-                                    title={`Bin ${cell.id}: ${cell.fill}% capacity`}
-                                    className={`heatmap-cell w-10 h-10 rounded cursor-help ${getHeatColor(cell.fill)} flex items-center justify-center text-[10px] font-bold`}
-                                >
-                                    {cell.fill}%
-                                </div>
-                            ))}
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                        <div className="lg:col-span-3 glass p-8 rounded-2xl overflow-x-auto">
+                            <div className="inline-grid gap-3" style={{ gridTemplateColumns: `repeat(${cols.length + 1}, minmax(40px, 1fr))` }}>
+                                <div className="h-10"></div>
+                                {cols.map(c => (
+                                    <div key={c} className="text-xs font-bold text-slate-600 text-center">{c}</div>
+                                ))}
+                                
+                                {rows.map(r => (
+                                    <React.Fragment key={r}>
+                                        <div className="text-xs font-bold text-slate-600 flex items-center justify-center">{r}</div>
+                                        {cols.map(c => (
+                                            <div 
+                                                key={`${r}${c}`} 
+                                                onClick={() => setSelectedBin(`${r}${c}`)}
+                                                className={`h-12 w-12 rounded-md ${getColor(r, c)} opacity-60 hover:opacity-100 heatmap-cell shadow-inner flex items-center justify-center text-[8px] font-bold`}
+                                            >
+                                                {r}{c}
+                                            </div>
+                                        ))}
+                                    </React.Fragment>
+                                ))}
+                            </div>
                         </div>
 
-                        <div className="mt-8 grid grid-cols-3 gap-6">
-                            {['A', 'B', 'C'].map(zone => (
-                                <div key={zone} className="p-4 bg-slate-900/50 rounded-xl border border-slate-800">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h4 className="font-bold">Zone {zone}</h4>
-                                        <span className="text-xs text-slate-400">48 Bins</span>
+                        <div className="glass p-6 rounded-2xl space-y-6">
+                            <h3 className="font-bold border-b border-slate-800 pb-4">Bin Analytics</h3>
+                            {selectedBin ? (
+                                <div className="space-y-4 animate-in fade-in zoom-in duration-200">
+                                    <div className="text-center py-8 bg-slate-900/50 rounded-xl border border-slate-800">
+                                        <span className="text-xs text-slate-500 uppercase block">Selected Location</span>
+                                        <span className="text-5xl font-black text-odoo">{selectedBin}</span>
                                     </div>
-                                    <div className="text-2xl font-bold">72.4% <span className="text-xs font-normal text-slate-500">Avg. Utilization</span></div>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-400">Utilization</span>
+                                            <span className="font-bold text-emerald-400">42%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                            <div className="bg-emerald-500 h-full w-[42%]"></div>
+                                        </div>
+                                    </div>
+                                    <div className="pt-4 space-y-3">
+                                        <span className="text-xs font-bold text-slate-500 uppercase">Current Inventory</span>
+                                        <div className="p-3 bg-slate-800/40 rounded-lg text-sm">
+                                            <p className="font-bold">Zebra TC52 Scanner</p>
+                                            <p className="text-xs text-slate-500">Qty: 24 | Lot: L-9982</p>
+                                        </div>
+                                    </div>
+                                    <button className="w-full py-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-semibold transition-colors">
+                                        Audit This Bin
+                                    </button>
                                 </div>
-                            ))}
+                            ) : (
+                                <div className="h-64 flex flex-col items-center justify-center text-slate-600 text-center px-4">
+                                    <Icon name="MousePointer2" size={40} className="mb-4 opacity-20" />
+                                    <p className="text-sm italic">Click a bin on the map to view detailed storage metrics</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -305,534 +458,100 @@
         };
 
         const SmartTransferWizard = () => {
-            const [source, setSource] = useState(1);
-            const [target, setTarget] = useState(2);
-            
+            const [step, setStep] = useState(1);
             return (
-                <div className="max-w-4xl mx-auto space-y-6">
-                    <div className="text-center">
-                        <h2 className="text-3xl font-bold">Smart Transfer Wizard</h2>
-                        <p className="text-slate-400 mt-2">AI-optimized routing for Inter-Warehouse Transfers (IWT)</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                        <div className="glass p-6 rounded-2xl h-64 flex flex-col">
-                            <h3 className="text-slate-400 font-medium mb-4 flex items-center">
-                                <div className="w-2 h-2 rounded-full bg-odoo-purple mr-2"></div> SOURCE NODE
-                            </h3>
-                            <select 
-                                className="bg-slate-900 border border-slate-700 rounded-lg p-3 outline-none focus:ring-2 focus:ring-odoo-purple"
-                                value={source}
-                                onChange={(e) => setSource(e.target.value)}
-                            >
-                                {MOCK_WAREHOUSES.map(wh => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
-                            </select>
-                            <div className="mt-auto pt-4 border-t border-slate-800">
-                                <div className="text-sm text-slate-400">Available Stock</div>
-                                <div className="text-xl font-bold">12,450 units</div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col items-center justify-center">
-                            <div className="w-12 h-12 bg-odoo-purple rounded-full flex items-center justify-center mb-4 status-pulse">
-                                <ArrowLeftRight className="text-white" />
-                            </div>
-                            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-700 to-transparent"></div>
-                            <div className="mt-4 text-xs font-mono text-slate-500 px-3 py-1 border border-slate-800 rounded">ROUTE: BRU-ANT-001</div>
-                        </div>
-
-                        <div className="glass p-6 rounded-2xl h-64 flex flex-col">
-                            <h3 className="text-slate-400 font-medium mb-4 flex items-center">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></div> DESTINATION NODE
-                            </h3>
-                            <select 
-                                className="bg-slate-900 border border-slate-700 rounded-lg p-3 outline-none focus:ring-2 focus:ring-emerald-500"
-                                value={target}
-                                onChange={(e) => setTarget(e.target.value)}
-                            >
-                                {MOCK_WAREHOUSES.map(wh => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
-                            </select>
-                            <div className="mt-auto pt-4 border-t border-slate-800">
-                                <div className="text-sm text-slate-400">Transit Duration</div>
-                                <div className="text-xl font-bold text-emerald-400">~ 2.5 Hours</div>
-                            </div>
+                <div className="p-8 max-w-5xl mx-auto">
+                    <div className="mb-12">
+                        <div className="flex justify-between items-center mb-8">
+                            {['Route Setup', 'Item Selection', 'Validation', 'Execution'].map((label, i) => (
+                                <div key={label} className="flex flex-col items-center relative flex-1">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 ${step > i ? 'bg-odoo text-white' : step === i + 1 ? 'border-2 border-odoo text-odoo' : 'bg-slate-800 text-slate-600'}`}>
+                                        {step > i + 1 ? <Icon name="Check" size={20} /> : i + 1}
+                                    </div>
+                                    <span className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${step === i + 1 ? 'text-white' : 'text-slate-500'}`}>{label}</span>
+                                    {i < 3 && <div className={`absolute top-5 left-1/2 w-full h-[2px] ${step > i + 1 ? 'bg-odoo' : 'bg-slate-800'}`}></div>}
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="glass p-6 rounded-2xl">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold">Item Allocation</h3>
-                            <button className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors">+ Add Items</button>
-                        </div>
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="text-xs text-slate-500 border-b border-slate-800">
-                                    <th className="pb-3">PRODUCT</th>
-                                    <th className="pb-3 text-center">CURRENT BAL</th>
-                                    <th className="pb-3 text-center">TRANSFER QTY</th>
-                                    <th className="pb-3 text-right">ACTION</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr className="border-b border-slate-800/50">
-                                    <td className="py-4 font-medium">Logitech MX Master 3S</td>
-                                    <td className="py-4 text-center">450</td>
-                                    <td className="py-4 text-center"><input type="number" defaultValue="50" className="bg-slate-900 border border-slate-800 w-16 text-center rounded px-1" /></td>
-                                    <td className="py-4 text-right"><X size={16} className="text-rose-500 inline cursor-pointer" /></td>
-                                </tr>
-                                <tr>
-                                    <td className="py-4 font-medium">Dell 27" UltraSharp Monitor</td>
-                                    <td className="py-4 text-center">120</td>
-                                    <td className="py-4 text-center"><input type="number" defaultValue="15" className="bg-slate-900 border border-slate-800 w-16 text-center rounded px-1" /></td>
-                                    <td className="py-4 text-right"><X size={16} className="text-rose-500 inline cursor-pointer" /></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="flex justify-end space-x-3">
-                        <button className="px-6 py-2 border border-slate-700 rounded-lg hover:bg-slate-800">Save Draft</button>
-                        <button className="px-6 py-2 bg-odoo-purple text-white rounded-lg hover:opacity-90">Confirm Transfer Request</button>
-                    </div>
-                </div>
-            );
-        };
-
-        const Dashboard = () => {
-            return (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-bold">Inventory Intelligence Dashboard</h2>
-                            <p className="text-slate-400">Real-time overview of global operations</p>
-                        </div>
-                        <div className="flex space-x-3">
-                            <div className="bg-slate-800 p-1.5 rounded-lg flex">
-                                <button className="px-4 py-1.5 bg-slate-900 rounded-md text-sm font-medium shadow-sm">Real-time</button>
-                                <button className="px-4 py-1.5 text-slate-400 text-sm font-medium">Historical</button>
-                            </div>
-                            <button className="bg-odoo-purple p-2.5 rounded-lg text-white"><Download size={20} /></button>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <StatCard title="ATP Stock Units" value="84,231" icon={Box} trend={12.4} color="bg-odoo-purple" />
-                        <StatCard title="Active Picking Ops" value="142" icon={Package} trend={5.1} color="bg-emerald-500" />
-                        <StatCard title="Storage Alerts" value="8" icon={AlertTriangle} trend={-2.2} color="bg-rose-500" />
-                        <StatCard title="Daily Scans" value="2,841" icon={Barcode} trend={8.7} color="bg-amber-500" />
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 glass rounded-2xl p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-bold">Operational Performance</h3>
-                                <Filter size={18} className="text-slate-400" />
-                            </div>
-                            <div className="h-64 flex items-end justify-between space-x-2 px-2">
-                                {[65, 45, 75, 55, 85, 95, 70, 60, 80, 50, 40, 90].map((h, i) => (
-                                    <div key={i} className="flex-1 group relative">
-                                        <div 
-                                            className="bg-slate-800 group-hover:bg-odoo-purple transition-all duration-300 rounded-t w-full" 
-                                            style={{ height: `${h}%` }}
-                                        ></div>
-                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-[10px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {h}k
+                    <div className="glass p-10 rounded-3xl min-h-[400px] flex flex-col">
+                        {step === 1 && (
+                            <div className="space-y-8 animate-in slide-in-from-bottom duration-500">
+                                <div className="text-center">
+                                    <h2 className="text-2xl font-bold mb-2">Configure Smart Route</h2>
+                                    <p className="text-slate-400">Odoo 18 Multi-Warehouse AI Routing Logic</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-12">
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Source Location</label>
+                                        <div className="p-6 bg-slate-900 border-2 border-slate-800 rounded-2xl hover:border-odoo cursor-pointer transition-all">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-lg flex items-center justify-center">
+                                                    <Icon name="Warehouse" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-lg">WH/Main/Aisle-A</p>
+                                                    <p className="text-xs text-slate-500">Primary Fulfillment Center</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                            <div className="flex justify-between mt-4 text-[10px] text-slate-500 uppercase tracking-widest font-bold px-2">
-                                <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span>
-                            </div>
-                        </div>
-
-                        <div className="glass rounded-2xl p-6">
-                            <h3 className="text-lg font-bold mb-6">Recent Scan Audit</h3>
-                            <div className="space-y-4">
-                                {MOCK_LOGS.map(log => (
-                                    <div key={log.id} className="flex items-center space-x-3 p-3 bg-slate-900/40 rounded-xl border border-slate-800/50">
-                                        <div className={`p-2 rounded-lg ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                            {log.status === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Destination</label>
+                                        <div className="p-6 bg-slate-900 border-2 border-slate-800 rounded-2xl hover:border-odoo cursor-pointer transition-all">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-lg flex items-center justify-center">
+                                                    <Icon name="ExternalLink" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-lg">WH/East/Transit</p>
+                                                    <p className="text-xs text-slate-500">Cross-Docking Point</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">{log.sku}</p>
-                                            <p className="text-[10px] text-slate-500 font-mono truncate">{log.barcode}</p>
-                                        </div>
-                                        <div className="text-[10px] text-slate-500 whitespace-nowrap">{log.time}</div>
                                     </div>
-                                ))}
-                                <button className="w-full text-center text-xs text-odoo-purple font-bold mt-4 hover:underline">VIEW ALL LOGS</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const App = () => {
-            const [view, setView] = useState('dashboard');
-            const [isSidebarOpen, setSidebarOpen] = useState(true);
-
-            const renderView = () => {
-                switch(view) {
-                    case 'dashboard': return <Dashboard />;
-                    case 'scanner': return <BarcodeScannerInterface />;
-                    case 'heatmap': return <WarehouseHeatmap />;
-                    case 'transfers': return <SmartTransferWizard />;
-                    case 'logs': 
-                        return (
-                            <div className="glass rounded-2xl overflow-hidden">
-                                <table className="w-full text-left">
-                                    <thead className="bg-slate-900/80">
-                                        <tr className="text-slate-400 text-xs uppercase">
-                                            <th className="px-6 py-4">Transaction ID</th>
-                                            <th className="px-6 py-4">Clerk</th>
-                                            <th className="px-6 py-4">Product SKU</th>
-                                            <th className="px-6 py-4">Raw Barcode Data</th>
-                                            <th className="px-6 py-4">Status</th>
-                                            <th className="px-6 py-4">Timestamp</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-800">
-                                        {[...MOCK_LOGS, ...MOCK_LOGS].map((log, i) => (
-                                            <tr key={i} className="hover:bg-slate-800/30 transition-colors">
-                                                <td className="px-6 py-4 font-mono text-xs">{log.id}</td>
-                                                <td className="px-6 py-4">{log.user}</td>
-                                                <td className="px-6 py-4 font-medium">{log.sku}</td>
-                                                <td className="px-6 py-4 font-mono text-xs text-slate-400">{log.barcode}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                                        {log.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-xs text-slate-400">{log.time}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        );
-                    default: return <Dashboard />;
-                }
-            };
-
-            return (
-                <div className="flex h-screen overflow-hidden">
-                    {/* Sidebar */}
-                    <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} glass border-r-0 transition-all duration-300 flex flex-col z-50`}>
-                        <div className="p-6 flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-odoo-purple rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Box className="text-white" size={20} />
-                            </div>
-                            {isSidebarOpen && <span className="text-xl font-bold tracking-tight">Odoo <span className="text-odoo-purple">Inv</span></span>}
-                        </div>
-                        
-                        <nav className="flex-1 px-4 py-6 space-y-2">
-                            <SidebarItem icon={LayoutDashboard} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
-                            <SidebarItem icon={Barcode} label="Quick Scan" active={view === 'scanner'} onClick={() => setView('scanner')} />
-                            <SidebarItem icon={Map} label="Storage Map" active={view === 'heatmap'} onClick={() => setView('heatmap')} />
-                            <SidebarItem icon={ArrowLeftRight} label="Transfers" active={view === 'transfers'} onClick={() => setView('transfers')} />
-                            <SidebarItem icon={History} label="Audit Logs" active={view === 'logs'} onClick={() => setView('logs')} />
-                            <div className="pt-4 mt-4 border-t border-slate-800">
-                                <SidebarItem icon={Settings} label="Config" active={view === 'settings'} onClick={() => setView('settings')} />
-                            </div>
-                        </nav>
-
-                        {isSidebarOpen && (
-                            <div className="p-6">
-                                <div className="glass rounded-xl p-4 bg-odoo-purple/5">
-                                    <p className="text-xs text-slate-400 mb-2">System Status</p>
-                                    <div className="flex items-center text-xs font-bold text-emerald-400">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 status-pulse"></div>
-                                        CONNECTED v18.0.1
-                                    </div>
+                                </div>
+                                <div className="p-4 bg-indigo-900/10 border border-indigo-500/30 rounded-xl flex gap-4 items-center">
+                                    <Icon name="Info" size={20} className="text-indigo-400" />
+                                    <p className="text-xs text-indigo-300">Auto-trigger Pull Rules detected. This transfer will satisfy 12 pending Backorders at WH-East.</p>
                                 </div>
                             </div>
                         )}
-                    </aside>
 
-                    {/* Main Content */}
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        {/* Navbar */}
-                        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/50 backdrop-blur-md z-40">
-                            <div className="flex items-center space-x-4">
-                                <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400">
-                                    <LayoutDashboard size={20} />
-                                </button>
-                                <div className="hidden md:flex items-center bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 w-96">
-                                    <Search size={16} className="text-slate-500 mr-2" />
-                                    <input type="text" placeholder="Search SKU, Serial or Lot..." className="bg-transparent border-none outline-none text-sm w-full" />
-                                    <span className="text-[10px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded ml-2">⌘K</span>
+                        {step === 2 && (
+                            <div className="space-y-6 animate-in slide-in-from-right duration-400">
+                                <h3 className="text-xl font-bold">Select Items for Move</h3>
+                                <div className="space-y-3">
+                                    {INITIAL_STOCK.map(item => (
+                                        <div key={item.id} className="flex items-center gap-4 p-4 glass rounded-xl">
+                                            <input type="checkbox" className="w-5 h-5 accent-odoo" />
+                                            <div className="flex-1">
+                                                <p className="font-bold">{item.name}</p>
+                                                <p className="text-xs text-slate-500">Lot: {item.lot} | Stock: {item.physical}</p>
+                                            </div>
+                                            <div className="w-24">
+                                                <input type="number" defaultValue="1" className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm" />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
+                        )}
 
-                            <div className="flex items-center space-x-5">
-                                <div className="relative cursor-pointer group">
-                                    <Bell size={20} className="text-slate-400 group-hover:text-white transition-colors" />
-                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[10px] flex items-center justify-center font-bold">3</span>
-                                </div>
-                                <div className="h-8 w-px bg-slate-800"></div>
-                                <div className="flex items-center space-x-3 cursor-pointer group">
-                                    <div className="text-right hidden sm:block">
-                                        <p className="text-xs font-bold">Marc Demo</p>
-                                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">Warehouse Mgr</p>
-                                    </div>
-                                    <div className="w-9 h-9 bg-odoo-purple/20 rounded-full flex items-center justify-center border border-odoo-purple/30 group-hover:border-odoo-purple transition-colors">
-                                        <User size={18} className="text-odoo-purple" />
-                                    </div>
-                                </div>
-                            </div>
-                        </header>
-
-                        {/* Page Body */}
-                        <main className="flex-1 overflow-y-auto p-8 scroll-smooth">
-                            <div className="max-w-7xl mx-auto">
-                                {renderView()}
-                            </div>
-                        </main>
-                    </div>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
-</html><!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>demo-odoo-module | Advanced Inventory Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/lucide-react@latest"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body { 
-            background-color: #020617; 
-            color: #f8fafc; 
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            overflow: hidden;
-        }
-
-        .glass { 
-            background: rgba(15, 23, 42, 0.6); 
-            backdrop-filter: blur(12px); 
-            border: 1px solid rgba(255, 255, 255, 0.08); 
-        }
-
-        .odoo-purple { color: #714B67; }
-        .bg-odoo-purple { background-color: #714B67; }
-        .border-odoo-purple { border-color: #714B67; }
-        
-        .scanner-line {
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #714B67, transparent);
-            position: absolute;
-            width: 100%;
-            top: 50%;
-            animation: scan 2s infinite ease-in-out;
-        }
-
-        @keyframes scan {
-            0% { top: 10%; opacity: 0; }
-            50% { opacity: 1; }
-            100% { top: 90%; opacity: 0; }
-        }
-
-        .heatmap-cell {
-            transition: all 0.3s ease;
-        }
-        .heatmap-cell:hover {
-            transform: scale(1.1);
-            z-index: 10;
-            box-shadow: 0 0 15px rgba(113, 75, 103, 0.5);
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 10px;
-        }
-
-        .status-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-        const { 
-            LayoutDashboard, Barcode, Warehouse, ArrowLeftRight, 
-            History, Settings, Bell, Search, User, 
-            TrendingUp, Package, AlertTriangle, CheckCircle2,
-            Map, ChevronRight, Filter, Download, Plus, 
-            Camera, Volume2, Maximize, X, Activity, Box
-        } = lucideReact;
-
-        // --- Mock Data ---
-        const MOCK_WAREHOUSES = [
-            { id: 1, name: 'Main Hub - Brussels', zones: 12, capacity: 85, status: 'Active' },
-            { id: 2, name: 'Regional - Antwerp', zones: 4, capacity: 42, status: 'Active' },
-            { id: 3, name: 'Transit Node - Liege', zones: 2, capacity: 15, status: 'Maintenance' }
-        ];
-
-        const MOCK_LOGS = [
-            { id: 'LOG-8821', user: 'Marc Demo', sku: 'LAP-M2-001', barcode: '(01)054123456789(10)LOT42(17)261231', status: 'success', time: '10:42 AM' },
-            { id: 'LOG-8822', user: 'Marc Demo', sku: 'IPH-15-PRO', barcode: '(01)054123456790(10)LOT43(17)261231', status: 'success', time: '10:45 AM' },
-            { id: 'LOG-8823', user: 'Admin', sku: 'MOU-LOG-BT', barcode: 'ERR_INVALID_GS1', status: 'error', time: '11:02 AM' },
-            { id: 'LOG-8824', user: 'Marc Demo', sku: 'CAB-USB-C', barcode: '(01)054123456795(10)LOT11(17)270101', status: 'success', time: '11:15 AM' }
-        ];
-
-        // --- Components ---
-
-        const StatCard = ({ title, value, icon: Icon, trend, color }) => (
-            <div className="glass p-5 rounded-xl flex items-start justify-between">
-                <div>
-                    <p className="text-slate-400 text-sm font-medium">{title}</p>
-                    <h3 className="text-2xl font-bold mt-1">{value}</h3>
-                    <div className={`flex items-center mt-2 text-xs ${trend > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        <TrendingUp size={12} className="mr-1" />
-                        <span>{trend > 0 ? '+' : ''}{trend}% from last week</span>
-                    </div>
-                </div>
-                <div className={`p-3 rounded-lg bg-opacity-10 ${color}`}>
-                    <Icon className={color.replace('bg-', 'text-')} size={24} />
-                </div>
-            </div>
-        );
-
-        const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
-            <button 
-                onClick={onClick}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    active ? 'bg-odoo-purple text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-            >
-                <Icon size={20} />
-                <span className="font-medium">{label}</span>
-            </button>
-        );
-
-        const BarcodeScannerInterface = () => {
-            const [scannedItems, setScannedItems] = useState([
-                { id: 1, name: 'MacBook Pro M2', qty: 1, target: 5 },
-                { id: 2, name: 'iPhone 15 Pro Max', qty: 3, target: 3 },
-            ]);
-            const [isScanning, setIsScanning] = useState(false);
-            const [manualInput, setManualInput] = useState("");
-
-            const simulateScan = () => {
-                setIsScanning(true);
-                setTimeout(() => {
-                    setIsScanning(false);
-                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                    audio.play().catch(() => {});
-                }, 1500);
-            };
-
-            return (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-2xl font-bold">Mobile Barcode Interface</h2>
-                        <div className="flex space-x-2">
-                            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-xs rounded-full border border-emerald-500/20 flex items-center">
-                                <Activity size={12} className="mr-1" /> GS1-128 Engine Active
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="relative aspect-video glass rounded-2xl overflow-hidden flex items-center justify-center border-2 border-dashed border-slate-700">
-                                {isScanning ? (
-                                    <>
-                                        <div className="absolute inset-0 bg-slate-900/40"></div>
-                                        <div className="scanner-line"></div>
-                                        <div className="z-10 text-center">
-                                            <div className="animate-pulse mb-2">Analyzing GS1-128 String...</div>
-                                            <div className="text-xs text-slate-400 font-mono">(01)054123456789(10)LOT42(17)261231</div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <button onClick={simulateScan} className="flex flex-col items-center group">
-                                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 group-hover:bg-odoo-purple transition-colors">
-                                            <Camera className="text-white" />
-                                        </div>
-                                        <p className="text-slate-400 font-medium">Tap to start camera scanner</p>
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="glass p-6 rounded-2xl">
-                                <h3 className="text-lg font-semibold mb-4">Manual Fallback</h3>
-                                <div className="flex space-x-2">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Enter Barcode / GS1 Raw Data" 
-                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-odoo-purple outline-none"
-                                        value={manualInput}
-                                        onChange={(e) => setManualInput(e.target.value)}
-                                    />
-                                    <button onClick={simulateScan} className="bg-odoo-purple px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition-opacity">
-                                        Process
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="glass p-6 rounded-2xl flex flex-col h-full">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-semibold text-odoo-purple">Active Picking: WH/OUT/0042</h3>
-                                <Maximize size={18} className="text-slate-400 cursor-pointer" />
-                            </div>
-                            
-                            <div className="flex-1 space-y-4">
-                                {scannedItems.map(item => (
-                                    <div key={item.id} className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="font-medium">{item.name}</span>
-                                            <span className={`text-xs px-2 py-0.5 rounded-full ${item.qty === item.target ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                                {item.qty === item.target ? 'Complete' : 'Pending'}
-                                            </span>
-                                        </div>
-                                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                            <div 
-                                                className="bg-odoo-purple h-full transition-all duration-500" 
-                                                style={{ width: `${(item.qty / item.target) * 100}%` }}
-                                            ></div>
-                                        </div>
-                                        <div className="flex justify-between text-xs mt-2 text-slate-400 font-mono">
-                                            <span>Qty: {item.qty} / {item.target}</span>
-                                            <span>SKU: {item.id === 1 ? 'LAP-M2-001' : 'IPH-15-PRO'}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            
-                            <button className="mt-6 w-full py-4 bg-emerald-600 rounded-xl font-bold flex items-center justify-center space-x-2 hover:bg-emerald-500 transition-colors">
-                                <CheckCircle2 size={20} />
-                                <span>Validate Picking</span>
+                        <div className="mt-auto pt-10 flex justify-between">
+                            <button 
+                                onClick={() => setStep(s => Math.max(1, s - 1))}
+                                className={`px-8 py-3 rounded-lg font-bold border border-slate-700 hover:bg-slate-800 transition-all ${step === 1 ? 'invisible' : ''}`}
+                            >
+                                Previous
+                            </button>
+                            <button 
+                                onClick={() => step < 4 ? setStep(s => s + 1) : null}
+                                className="px-10 py-3 rounded-lg font-bold bg-odoo text-white hover:opacity-90 transition-all flex items-center gap-2"
+                            >
+                                {step === 4 ? 'Confirm & Process' : 'Continue'}
+                                <Icon name="ArrowRight" size={18} />
                             </button>
                         </div>
                     </div>
@@ -840,365 +559,150 @@
             );
         };
 
-        const WarehouseHeatmap = () => {
-            const rows = 8;
-            const cols = 12;
-            const grid = Array.from({ length: rows * cols }, (_, i) => ({
-                id: i,
-                fill: Math.floor(Math.random() * 100),
-                zone: i < 36 ? 'A' : i < 72 ? 'B' : 'C'
-            }));
-
-            const getHeatColor = (fill) => {
-                if (fill > 90) return 'bg-rose-500';
-                if (fill > 70) return 'bg-amber-500';
-                if (fill > 40) return 'bg-emerald-500';
-                return 'bg-slate-700';
-            };
+        const AuditLogs = () => {
+            const [logs] = useState([
+                { id: 1029, user: 'Marc André', action: 'Barcode Scan', details: 'PRO-100 (Success)', status: 'Verified', time: '2 mins ago', geo: '48.8566° N, 2.3522° E' },
+                { id: 1028, user: 'System', action: 'IWT Rule Trigger', details: 'WH-East Reorder', status: 'Automated', time: '14 mins ago', geo: 'System Server' },
+                { id: 1027, user: 'Sarah J.', action: 'Adjustment', details: 'Bin A2 Scrap (-2)', status: 'Approved', time: '1 hr ago', geo: '48.8566° N, 2.3522° E' },
+                { id: 1026, user: 'Marc André', action: 'Barcode Scan', details: 'Unknown Tag (Error)', status: 'Flagged', time: '3 hrs ago', geo: '48.8566° N, 2.3522° E' },
+                { id: 1025, user: 'Sarah J.', action: 'Zone Definition', details: 'Added Zone D-4', status: 'System', time: '5 hrs ago', geo: 'Office Node' },
+            ]);
 
             return (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between">
+                <div className="p-8">
+                    <div className="flex justify-between items-center mb-8">
                         <div>
-                            <h2 className="text-2xl font-bold">Storage Density Heatmap</h2>
-                            <p className="text-slate-400">Visual floor plan for Main Hub - Brussels</p>
+                            <h2 className="text-3xl font-bold">Immutable Audit Trail</h2>
+                            <p className="text-slate-400">Security-first logging for financial compliance & traceability</p>
                         </div>
-                        <div className="flex space-x-4 bg-slate-900 p-2 rounded-lg border border-slate-800">
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-slate-700 rounded mr-1"></div> Empty</div>
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-emerald-500 rounded mr-1"></div> Optimal</div>
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-amber-500 rounded mr-1"></div> High</div>
-                            <div className="flex items-center text-xs text-slate-400"><div className="w-3 h-3 bg-rose-500 rounded mr-1"></div> Critical</div>
-                        </div>
+                        <button className="flex items-center gap-2 px-4 py-2 glass rounded-lg text-sm hover:bg-slate-800">
+                            <Icon name="Download" size={16} />
+                            Export CSV
+                        </button>
                     </div>
 
-                    <div className="glass p-8 rounded-2xl overflow-auto">
-                        <div 
-                            className="grid gap-2 mx-auto" 
-                            style={{ 
-                                gridTemplateColumns: `repeat(${cols}, minmax(40px, 1fr))`,
-                                width: 'fit-content'
-                            }}
-                        >
-                            {grid.map(cell => (
-                                <div 
-                                    key={cell.id}
-                                    title={`Bin ${cell.id}: ${cell.fill}% capacity`}
-                                    className={`heatmap-cell w-10 h-10 rounded cursor-help ${getHeatColor(cell.fill)} flex items-center justify-center text-[10px] font-bold`}
-                                >
-                                    {cell.fill}%
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-8 grid grid-cols-3 gap-6">
-                            {['A', 'B', 'C'].map(zone => (
-                                <div key={zone} className="p-4 bg-slate-900/50 rounded-xl border border-slate-800">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h4 className="font-bold">Zone {zone}</h4>
-                                        <span className="text-xs text-slate-400">48 Bins</span>
-                                    </div>
-                                    <div className="text-2xl font-bold">72.4% <span className="text-xs font-normal text-slate-500">Avg. Utilization</span></div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const SmartTransferWizard = () => {
-            const [source, setSource] = useState(1);
-            const [target, setTarget] = useState(2);
-            
-            return (
-                <div className="max-w-4xl mx-auto space-y-6">
-                    <div className="text-center">
-                        <h2 className="text-3xl font-bold">Smart Transfer Wizard</h2>
-                        <p className="text-slate-400 mt-2">AI-optimized routing for Inter-Warehouse Transfers (IWT)</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                        <div className="glass p-6 rounded-2xl h-64 flex flex-col">
-                            <h3 className="text-slate-400 font-medium mb-4 flex items-center">
-                                <div className="w-2 h-2 rounded-full bg-odoo-purple mr-2"></div> SOURCE NODE
-                            </h3>
-                            <select 
-                                className="bg-slate-900 border border-slate-700 rounded-lg p-3 outline-none focus:ring-2 focus:ring-odoo-purple"
-                                value={source}
-                                onChange={(e) => setSource(e.target.value)}
-                            >
-                                {MOCK_WAREHOUSES.map(wh => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
-                            </select>
-                            <div className="mt-auto pt-4 border-t border-slate-800">
-                                <div className="text-sm text-slate-400">Available Stock</div>
-                                <div className="text-xl font-bold">12,450 units</div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col items-center justify-center">
-                            <div className="w-12 h-12 bg-odoo-purple rounded-full flex items-center justify-center mb-4 status-pulse">
-                                <ArrowLeftRight className="text-white" />
-                            </div>
-                            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-700 to-transparent"></div>
-                            <div className="mt-4 text-xs font-mono text-slate-500 px-3 py-1 border border-slate-800 rounded">ROUTE: BRU-ANT-001</div>
-                        </div>
-
-                        <div className="glass p-6 rounded-2xl h-64 flex flex-col">
-                            <h3 className="text-slate-400 font-medium mb-4 flex items-center">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></div> DESTINATION NODE
-                            </h3>
-                            <select 
-                                className="bg-slate-900 border border-slate-700 rounded-lg p-3 outline-none focus:ring-2 focus:ring-emerald-500"
-                                value={target}
-                                onChange={(e) => setTarget(e.target.value)}
-                            >
-                                {MOCK_WAREHOUSES.map(wh => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
-                            </select>
-                            <div className="mt-auto pt-4 border-t border-slate-800">
-                                <div className="text-sm text-slate-400">Transit Duration</div>
-                                <div className="text-xl font-bold text-emerald-400">~ 2.5 Hours</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="glass p-6 rounded-2xl">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold">Item Allocation</h3>
-                            <button className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors">+ Add Items</button>
-                        </div>
+                    <div className="glass rounded-2xl overflow-hidden">
                         <table className="w-full text-left">
-                            <thead>
-                                <tr className="text-xs text-slate-500 border-b border-slate-800">
-                                    <th className="pb-3">PRODUCT</th>
-                                    <th className="pb-3 text-center">CURRENT BAL</th>
-                                    <th className="pb-3 text-center">TRANSFER QTY</th>
-                                    <th className="pb-3 text-right">ACTION</th>
+                            <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-widest border-b border-slate-800">
+                                <tr>
+                                    <th className="px-6 py-4">Event ID</th>
+                                    <th className="px-6 py-4">User / Actor</th>
+                                    <th className="px-6 py-4">Action Type</th>
+                                    <th className="px-6 py-4">Event Details</th>
+                                    <th className="px-6 py-4">Source Metadata</th>
+                                    <th className="px-6 py-4 text-right">Timestamp</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr className="border-b border-slate-800/50">
-                                    <td className="py-4 font-medium">Logitech MX Master 3S</td>
-                                    <td className="py-4 text-center">450</td>
-                                    <td className="py-4 text-center"><input type="number" defaultValue="50" className="bg-slate-900 border border-slate-800 w-16 text-center rounded px-1" /></td>
-                                    <td className="py-4 text-right"><X size={16} className="text-rose-500 inline cursor-pointer" /></td>
-                                </tr>
-                                <tr>
-                                    <td className="py-4 font-medium">Dell 27" UltraSharp Monitor</td>
-                                    <td className="py-4 text-center">120</td>
-                                    <td className="py-4 text-center"><input type="number" defaultValue="15" className="bg-slate-900 border border-slate-800 w-16 text-center rounded px-1" /></td>
-                                    <td className="py-4 text-right"><X size={16} className="text-rose-500 inline cursor-pointer" /></td>
-                                </tr>
+                            <tbody className="text-sm divide-y divide-slate-800">
+                                {logs.map(log => (
+                                    <tr key={log.id} className="hover:bg-slate-800/10 transition-colors group">
+                                        <td className="px-6 py-4 font-mono text-odoo font-bold">#{log.id}</td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 bg-slate-800 rounded-full flex items-center justify-center text-[10px]">
+                                                    {log.user.split(' ').map(n => n[0]).join('')}
+                                                </div>
+                                                {log.user}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="font-medium text-slate-200">{log.action}</span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.status === 'Verified' ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400'}`}>
+                                                {log.details}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 font-mono text-[10px] text-slate-500">{log.geo}</td>
+                                        <td className="px-6 py-4 text-right text-slate-500 group-hover:text-slate-300">{log.time}</td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
-
-                    <div className="flex justify-end space-x-3">
-                        <button className="px-6 py-2 border border-slate-700 rounded-lg hover:bg-slate-800">Save Draft</button>
-                        <button className="px-6 py-2 bg-odoo-purple text-white rounded-lg hover:opacity-90">Confirm Transfer Request</button>
-                    </div>
                 </div>
             );
         };
 
-        const Dashboard = () => {
-            return (
+        const Settings = () => (
+            <div className="p-8 max-w-3xl space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                <h2 className="text-3xl font-bold">System Configuration</h2>
+                
                 <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-bold">Inventory Intelligence Dashboard</h2>
-                            <p className="text-slate-400">Real-time overview of global operations</p>
-                        </div>
-                        <div className="flex space-x-3">
-                            <div className="bg-slate-800 p-1.5 rounded-lg flex">
-                                <button className="px-4 py-1.5 bg-slate-900 rounded-md text-sm font-medium shadow-sm">Real-time</button>
-                                <button className="px-4 py-1.5 text-slate-400 text-sm font-medium">Historical</button>
+                    <section className="glass p-6 rounded-2xl">
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                            <Icon name="Smartphone" className="text-odoo" />
+                            Hardware Integration
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center p-3 hover:bg-slate-800/30 rounded-lg">
+                                <div>
+                                    <p className="font-medium text-sm">Zebra DataWedge Support</p>
+                                    <p className="text-xs text-slate-500">Native scanner wedge hooks for high-speed parsing</p>
+                                </div>
+                                <div className="w-12 h-6 bg-odoo rounded-full relative"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div>
                             </div>
-                            <button className="bg-odoo-purple p-2.5 rounded-lg text-white"><Download size={20} /></button>
+                            <div className="flex justify-between items-center p-3 hover:bg-slate-800/30 rounded-lg">
+                                <div>
+                                    <p className="font-medium text-sm">Voice Alerts (TTS)</p>
+                                    <p className="text-xs text-slate-500">Audible confirmation for clerks during batch picking</p>
+                                </div>
+                                <div className="w-12 h-6 bg-odoo rounded-full relative"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div>
+                            </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <StatCard title="ATP Stock Units" value="84,231" icon={Box} trend={12.4} color="bg-odoo-purple" />
-                        <StatCard title="Active Picking Ops" value="142" icon={Package} trend={5.1} color="bg-emerald-500" />
-                        <StatCard title="Storage Alerts" value="8" icon={AlertTriangle} trend={-2.2} color="bg-rose-500" />
-                        <StatCard title="Daily Scans" value="2,841" icon={Barcode} trend={8.7} color="bg-amber-500" />
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 glass rounded-2xl p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-bold">Operational Performance</h3>
-                                <Filter size={18} className="text-slate-400" />
-                            </div>
-                            <div className="h-64 flex items-end justify-between space-x-2 px-2">
-                                {[65, 45, 75, 55, 85, 95, 70, 60, 80, 50, 40, 90].map((h, i) => (
-                                    <div key={i} className="flex-1 group relative">
-                                        <div 
-                                            className="bg-slate-800 group-hover:bg-odoo-purple transition-all duration-300 rounded-t w-full" 
-                                            style={{ height: `${h}%` }}
-                                        ></div>
-                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-[10px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {h}k
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="flex justify-between mt-4 text-[10px] text-slate-500 uppercase tracking-widest font-bold px-2">
-                                <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span>
-                            </div>
+                    <section className="glass p-6 rounded-2xl">
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-amber-400">
+                            <Icon name="Database" />
+                            Offline Management
+                        </h3>
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4">
+                            <p className="text-xs text-amber-200">System is currently configured to store up to 1,000 scans locally when Wi-Fi connection is lost.</p>
                         </div>
-
-                        <div className="glass rounded-2xl p-6">
-                            <h3 className="text-lg font-bold mb-6">Recent Scan Audit</h3>
-                            <div className="space-y-4">
-                                {MOCK_LOGS.map(log => (
-                                    <div key={log.id} className="flex items-center space-x-3 p-3 bg-slate-900/40 rounded-xl border border-slate-800/50">
-                                        <div className={`p-2 rounded-lg ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                            {log.status === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">{log.sku}</p>
-                                            <p className="text-[10px] text-slate-500 font-mono truncate">{log.barcode}</p>
-                                        </div>
-                                        <div className="text-[10px] text-slate-500 whitespace-nowrap">{log.time}</div>
-                                    </div>
-                                ))}
-                                <button className="w-full text-center text-xs text-odoo-purple font-bold mt-4 hover:underline">VIEW ALL LOGS</button>
-                            </div>
-                        </div>
-                    </div>
+                        <button className="w-full py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm font-bold">Clear Local Cache</button>
+                    </section>
                 </div>
-            );
-        };
+            </div>
+        );
+
+        // --- Main App Controller ---
 
         const App = () => {
-            const [view, setView] = useState('dashboard');
-            const [isSidebarOpen, setSidebarOpen] = useState(true);
+            const [activeTab, setActiveTab] = useState('dashboard');
 
-            const renderView = () => {
-                switch(view) {
+            const renderContent = () => {
+                switch(activeTab) {
                     case 'dashboard': return <Dashboard />;
                     case 'scanner': return <BarcodeScannerInterface />;
                     case 'heatmap': return <WarehouseHeatmap />;
-                    case 'transfers': return <SmartTransferWizard />;
-                    case 'logs': 
-                        return (
-                            <div className="glass rounded-2xl overflow-hidden">
-                                <table className="w-full text-left">
-                                    <thead className="bg-slate-900/80">
-                                        <tr className="text-slate-400 text-xs uppercase">
-                                            <th className="px-6 py-4">Transaction ID</th>
-                                            <th className="px-6 py-4">Clerk</th>
-                                            <th className="px-6 py-4">Product SKU</th>
-                                            <th className="px-6 py-4">Raw Barcode Data</th>
-                                            <th className="px-6 py-4">Status</th>
-                                            <th className="px-6 py-4">Timestamp</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-800">
-                                        {[...MOCK_LOGS, ...MOCK_LOGS].map((log, i) => (
-                                            <tr key={i} className="hover:bg-slate-800/30 transition-colors">
-                                                <td className="px-6 py-4 font-mono text-xs">{log.id}</td>
-                                                <td className="px-6 py-4">{log.user}</td>
-                                                <td className="px-6 py-4 font-medium">{log.sku}</td>
-                                                <td className="px-6 py-4 font-mono text-xs text-slate-400">{log.barcode}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                                        {log.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-xs text-slate-400">{log.time}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        );
+                    case 'transfer': return <SmartTransferWizard />;
+                    case 'logs': return <AuditLogs />;
+                    case 'settings': return <Settings />;
                     default: return <Dashboard />;
                 }
             };
 
             return (
-                <div className="flex h-screen overflow-hidden">
-                    {/* Sidebar */}
-                    <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} glass border-r-0 transition-all duration-300 flex flex-col z-50`}>
-                        <div className="p-6 flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-odoo-purple rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Box className="text-white" size={20} />
-                            </div>
-                            {isSidebarOpen && <span className="text-xl font-bold tracking-tight">Odoo <span className="text-odoo-purple">Inv</span></span>}
+                <div className="flex min-h-screen">
+                    <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <main className="flex-1 ml-64 min-h-screen overflow-y-auto">
+                        <TopNav title={activeTab} />
+                        <div className="pb-20">
+                            {renderContent()}
                         </div>
-                        
-                        <nav className="flex-1 px-4 py-6 space-y-2">
-                            <SidebarItem icon={LayoutDashboard} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
-                            <SidebarItem icon={Barcode} label="Quick Scan" active={view === 'scanner'} onClick={() => setView('scanner')} />
-                            <SidebarItem icon={Map} label="Storage Map" active={view === 'heatmap'} onClick={() => setView('heatmap')} />
-                            <SidebarItem icon={ArrowLeftRight} label="Transfers" active={view === 'transfers'} onClick={() => setView('transfers')} />
-                            <SidebarItem icon={History} label="Audit Logs" active={view === 'logs'} onClick={() => setView('logs')} />
-                            <div className="pt-4 mt-4 border-t border-slate-800">
-                                <SidebarItem icon={Settings} label="Config" active={view === 'settings'} onClick={() => setView('settings')} />
-                            </div>
-                        </nav>
-
-                        {isSidebarOpen && (
-                            <div className="p-6">
-                                <div className="glass rounded-xl p-4 bg-odoo-purple/5">
-                                    <p className="text-xs text-slate-400 mb-2">System Status</p>
-                                    <div className="flex items-center text-xs font-bold text-emerald-400">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 status-pulse"></div>
-                                        CONNECTED v18.0.1
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </aside>
-
-                    {/* Main Content */}
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        {/* Navbar */}
-                        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/50 backdrop-blur-md z-40">
-                            <div className="flex items-center space-x-4">
-                                <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400">
-                                    <LayoutDashboard size={20} />
-                                </button>
-                                <div className="hidden md:flex items-center bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 w-96">
-                                    <Search size={16} className="text-slate-500 mr-2" />
-                                    <input type="text" placeholder="Search SKU, Serial or Lot..." className="bg-transparent border-none outline-none text-sm w-full" />
-                                    <span className="text-[10px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded ml-2">⌘K</span>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center space-x-5">
-                                <div className="relative cursor-pointer group">
-                                    <Bell size={20} className="text-slate-400 group-hover:text-white transition-colors" />
-                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[10px] flex items-center justify-center font-bold">3</span>
-                                </div>
-                                <div className="h-8 w-px bg-slate-800"></div>
-                                <div className="flex items-center space-x-3 cursor-pointer group">
-                                    <div className="text-right hidden sm:block">
-                                        <p className="text-xs font-bold">Marc Demo</p>
-                                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">Warehouse Mgr</p>
-                                    </div>
-                                    <div className="w-9 h-9 bg-odoo-purple/20 rounded-full flex items-center justify-center border border-odoo-purple/30 group-hover:border-odoo-purple transition-colors">
-                                        <User size={18} className="text-odoo-purple" />
-                                    </div>
-                                </div>
-                            </div>
-                        </header>
-
-                        {/* Page Body */}
-                        <main className="flex-1 overflow-y-auto p-8 scroll-smooth">
-                            <div className="max-w-7xl mx-auto">
-                                {renderView()}
-                            </div>
-                        </main>
-                    </div>
+                    </main>
                 </div>
             );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+
+        // Initialize Lucide Icons after React Render
+        setTimeout(() => {
+            if(window.lucide) window.lucide.createIcons();
+        }, 100);
     </script>
 </body>
 </html>
